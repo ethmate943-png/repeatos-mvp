@@ -2,13 +2,30 @@
   "name": "repeatos-mvp",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "postinstall": "cd apps/widget && npm install && cd ../api && npm install",
-    "heroku-postbuild": "cd apps/widget && npm run build",
-    "build": "cd apps/widget && npm run build",
-    "start": "cd apps/api && npx tsx src/server.ts",
-    "db:migrate": "cd apps/api && npm run db:migrate",
-    "db:seed": "cd apps/api && npm run db:seed"
+    "build": "cd apps/widget && npx vite build && cd ../../apps/api && npx tsc -p tsconfig.json",
+    "start": "node apps/api/dist/server.js",
+    "dev": "cd apps/api && npx tsx watch src/server.ts",
+    "db:migrate": "cd apps/api && npx tsx src/scripts/migrate.ts",
+    "db:seed": "cd apps/api && npx tsx src/scripts/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^9.0.0",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.8.4",
+    "pg": "^8.20.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/pg": "^8.20.0",
+    "vitest": "^4.1.1"
   },
   "engines": {
     "node": ">=20"
