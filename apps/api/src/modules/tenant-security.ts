@@ -16,8 +16,9 @@ export class TenantSecurityService {
   }
 
   assertOriginAllowed(tenant: TenantContext, origin?: string): void {
+    if (!origin) return;
     if (tenant.allowedOrigins.includes("*")) return;
-    if (!origin || !tenant.allowedOrigins.includes(origin)) {
+    if (!tenant.allowedOrigins.includes(origin)) {
       throw new DomainError(
         "ORIGIN_NOT_ALLOWED",
         "Origin is not allowed for this business.",
