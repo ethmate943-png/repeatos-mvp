@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "cd apps/widget && npm install && cd ../api && npm install",
+    "heroku-postbuild": "npm run build",
     "build": "cd apps/widget && npm run build && cd ../api && npm run build",
     "start": "node apps/api/dist/server.js",
     "db:migrate": "cd apps/api && npm run db:migrate",
