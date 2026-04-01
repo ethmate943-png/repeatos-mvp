@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepeatOS Demo Menu</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .item-card {
+            background: var(--card);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s;
+        }
+        .item-card:hover {
+            transform: translateY(-4px);
+        }
+        button {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .cart-overlay {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--accent);
+            color: var(--bg);
+            padding: 1rem 2rem;
+            border-radius: 2rem;
+            font-weight: bold;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <h1>☕ Bliss Cafe Menu (Demo)</h1>
+    <p>Scan the QR code to see the loyalty widget!</p>
+
+    <div class="menu-grid">
+        <div class="item-card">
+            <h3>Espresso</h3>
+            <p>Rich, bold, and energizing.</p>
+            <p><strong>₦1,200</strong></p>
+            <button onclick="addToCart('itm_1', 'Espresso', 120000)">Add to Cart</button>
+        </div>
+        <div class="item-card">
+            <h3>Croissant</h3>
+            <p>Buttery, flaky, and golden.</p>
+            <p><strong>₦1,500</strong></p>
+            <button onclick="addToCart('itm_2', 'Croissant', 150000)">Add to Cart</button>
+        </div>
+        <div class="item-card">
+            <h3>Latte</h3>
+            <p>Creamy and smooth.</p>
+            <p><strong>₦1,800</strong></p>
+            <button onclick="addToCart('itm_3', 'Latte', 180000)">Add to Cart</button>
+        </div>
+    </div>
+
+    <div id="cart-btn" class="cart-overlay" style="display: none;" onclick="checkout()">
+        Checkout (₦<span id="cart-total">0</span>)
+    </div>
+
+    <!-- RepeatOS Widget Script -->
+    <script src="http://localhost:3001/index.js"></script>
+    <script>
+        // RepeatOS Widget Loader
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'http://localhost:3001/index.js';
+            script.onload = () => {
+              window.RepeatOSWidget.init({
+                token: 'demo-token-1234',
+                apiBase: 'http://localhost:3001'
+              });
+            };
+            document.head.appendChild(script);
+        })();
+
+        let cart = [];
+        let totalVal = 0;
+
+        function addToCart(id, name, price) {
+            cart.push({ id, name, quantity: 1, priceKobo: price });
+            totalVal += price;
+            updateCart();
+        }
+
+        function updateCart() {
+            const btn = document.getElementById('cart-btn');
+            const totalSpan = document.getElementById('cart-total');
+            if (cart.length > 0) {
+                btn.style.display = 'block';
+                totalSpan.innerText = (totalVal / 100).toLocaleString();
+            }
+        }
+
+        async function checkout() {
+            // Get phone from widget session or prompt
+            const phone = prompt("Enter phone number to track loyalty:");
+            if (!phone) return;
+
+            const payload = {
+                token: 'demo-token-1234',
+                phone: phone,
+                items: cart,
+                totalKobo: totalVal
+            };
+
+            try {
+                const res = await fetch('http://localhost:3001/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const order = await res.json();
+                    alert(`Order placed! ID: ${order.id}. Ask staff to accept to earn points.`);
+                    cart = [];
+                    totalVal = 0;
+                    document.getElementById('cart-btn').style.display = 'none';
+                } else {
+                    const err = await res.json();
+                    alert(`Checkout failed: ${err.error || 'Unknown error'}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Checkout error. Check console.");
+            }
+        }
+    </script>
+</body>
+</html>

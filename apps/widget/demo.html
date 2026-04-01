@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bliss Cafe — Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #1a1a1a;
+      background: #faf9f6;
+    }
+
+    /* ── Nav ── */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #c45e2c;
+    }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a {
+      color: #555;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .nav-links a:hover { color: #1a1a1a; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 80px 24px 60px;
+      background: linear-gradient(180deg, #fff 0%, #faf9f6 100%);
+    }
+    .hero-badge {
+      display: inline-block;
+      background: #c45e2c14;
+      color: #c45e2c;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .hero p {
+      font-size: 17px;
+      color: #777;
+      max-width: 480px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
+    .hero-cta {
+      display: inline-block;
+      background: #c45e2c;
+      color: #fff;
+      padding: 14px 32px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .hero-cta:hover { opacity: 0.9; }
+
+    /* ── Menu section ── */
+    .section {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 60px 24px;
+    }
+    .section-label {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #c45e2c;
+      margin-bottom: 8px;
+    }
+    .section h2 {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 40px;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .menu-card {
+      background: #fff;
+      border: 1px solid #eee;
+      border-radius: 16px;
+      padding: 24px;
+      transition: box-shadow 0.2s;
+    }
+    .menu-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .menu-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .menu-card .desc {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    .menu-card .price {
+      font-size: 15px;
+      font-weight: 700;
+      color: #c45e2c;
+    }
+
+    /* ── Loyalty banner ── */
+    .loyalty-banner {
+      background: linear-gradient(135deg, #c45e2c, #a04a22);
+      color: #fff;
+      text-align: center;
+      padding: 48px 24px;
+      border-radius: 24px;
+      max-width: 860px;
+      margin: 0 auto 60px;
+    }
+    .loyalty-banner h2 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    .loyalty-banner p {
+      font-size: 15px;
+      opacity: 0.85;
+      max-width: 400px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 13px;
+      color: #bbb;
+      border-top: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">Bliss Cafe</div>
+  <ul class="nav-links">
+    <li><a href="#">Menu</a></li>
+    <li><a href="#">Locations</a></li>
+    <li><a href="#">About</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <span class="hero-badge">Lagos's Favourite Cafe</span>
+  <h1>Great coffee, brewed<br>with intention</h1>
+  <p>Fresh beans, warm vibes, and a loyalty program that rewards every visit. Check in with your phone and earn free drinks.</p>
+  <a href="#" class="hero-cta">View Our Menu</a>
+</section>
+
+<section class="section">
+  <p class="section-label">Our Menu</p>
+  <h2>Today's Picks</h2>
+  <div class="menu-grid">
+    <div class="menu-card">
+      <h3>Flat White</h3>
+      <p class="desc">Double ristretto, velvety steamed milk</p>
+      <span class="price">₦2,500</span>
+    </div>
+    <div class="menu-card">
+      <h3>Cold Brew</h3>
+      <p class="desc">20-hour steep, served over ice</p>
+      <span class="price">₦2,000</span>
+    </div>
+    <div class="menu-card">
+      <h3>Matcha Latte</h3>
+      <p class="desc">Ceremonial grade, oat milk, lightly sweetened</p>
+      <span class="price">₦2,800</span>
+    </div>
+    <div class="menu-card">
+      <h3>Croissant</h3>
+      <p class="desc">Butter croissant, baked fresh every morning</p>
+      <span class="price">₦1,500</span>
+    </div>
+    <div class="menu-card">
+      <h3>Açaí Bowl</h3>
+      <p class="desc">Açaí, banana, granola, coconut flakes</p>
+      <span class="price">₦3,200</span>
+    </div>
+    <div class="menu-card">
+      <h3>Chai Latte</h3>
+      <p class="desc">Spiced masala chai, steamed milk</p>
+      <span class="price">₦2,200</span>
+    </div>
+  </div>
+</section>
+
+<section style="padding: 0 24px 60px;">
+  <div class="loyalty-banner">
+    <h2>Every 5th visit earns a free coffee</h2>
+    <p>Just scan the QR code at the counter or tap the check-in button on this page. It's that simple.</p>
+  </div>
+</section>
+
+<footer class="footer">
+  &copy; 2026 Bliss Cafe &middot; Lagos, Nigeria &middot; Powered by RepeatOS
+</footer>
+
+<!-- RepeatOS Widget — just 2 lines to embed on any site -->
+<script>
+  window.REPEATOS_CONFIG = {
+    token: 'demo-token-1234',
+    businessName: 'Bliss Cafe',
+    rewardLabel: 'Free Coffee',
+    rewardVisits: 5,
+    apiBaseUrl: window.location.origin,
+    primaryColor: '#c45e2c',
+    mode: 'modal',
+    triggerLabel: 'Check In',
+  };
+</script>
+<script src="/public/widget.iife.js"></script>
+
+</body>
+</html>

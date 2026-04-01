@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepeatOS Widget Test</title>
+</head>
+<body>
+    <h1>Test Merchant Page</h1>
+    <p>Welcome to our store. We use RepeatOS for loyalty!</p>
+
+    <!-- Placeholder for Widget Embed -->
+    <div id="repeatos-widget-container">
+        <!-- The embed code will be pasted here after creation -->
+    </div>
+
+    <hr>
+    <h3>Verification Steps:</h3>
+    <ol>
+        <li>Create a widget via POST <code>/admin/widgets</code></li>
+        <li>Get the embed code via GET <code>/widgets/:id/embed</code></li>
+        <li>Paste the embed code into the container above</li>
+        <li>Refresh the page</li>
+    </ol>
+
+    <script>
+        // Helper to auto-load a widget for testing if an ID is provided in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const widgetId = urlParams.get('widgetId');
+        if (widgetId) {
+            fetch(`http://localhost:4000/widgets/${widgetId}/embed`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('repeatos-widget-container').innerHTML = data.embedCode;
+                    // We need to manually execute the scripts since innerHTML doesn't do it
+                    const scripts = document.getElementById('repeatos-widget-container').getElementsByTagName('script');
+                    for (let n = 0; n < scripts.length; n++) {
+                        const s = document.createElement('script');
+                        if (scripts[n].src) {
+                            s.src = scripts[n].src;
+                            s.async = true;
+                        } else {
+                            s.innerHTML = scripts[n].innerHTML;
+                        }
+                        document.body.appendChild(s);
+                    }
+                });
+        }
+    </script>
+</body>
+</html>

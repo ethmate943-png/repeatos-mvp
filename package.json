@@ -1,0 +1,15 @@
+{
+  "name": "repeatos-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "cd apps/widget && npm install && cd ../api && npm install",
+    "build": "cd apps/widget && npm run build && cd ../api && npm run build",
+    "start": "node apps/api/dist/server.js",
+    "db:migrate": "cd apps/api && npm run db:migrate",
+    "db:seed": "cd apps/api && npm run db:seed"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
