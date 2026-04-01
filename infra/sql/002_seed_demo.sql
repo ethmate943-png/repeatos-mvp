@@ -3,7 +3,7 @@ VALUES (
   '11111111-1111-1111-1111-111111111111',
   'bliss-cafe',
   'Bliss Cafe',
-  ARRAY['http://localhost:3000', 'http://localhost:4000', 'http://localhost:5173', 'https://blisscafe.com']
+  ARRAY['http://localhost:3000', 'http://localhost:4000', 'http://localhost:5173', 'https://blisscafe.com', 'https://frequent-ronnica-ethname-9bccfe51.koyeb.app']
 )
 ON CONFLICT (id) DO UPDATE SET allowed_origins = EXCLUDED.allowed_origins;
 
