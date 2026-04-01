@@ -1,1 +1,1 @@
-web: node apps/api/dist/server.js
+web: npx tsx apps/api/src/server.ts
