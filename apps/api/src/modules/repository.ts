@@ -1,5 +1,6 @@
 import type {
   CustomerRecord,
+  CustomerSessionRecord,
   ScanRecord,
   TenantContext,
   WidgetRecord,
@@ -21,11 +22,24 @@ export interface CustomerLedgerRepository {
     businessId: string,
     phone: string,
   ): Promise<CustomerRecord | null>;
-  upsertVisit(businessId: string, phone: string): Promise<CustomerRecord>;
+  upsertVisit(
+    businessId: string,
+    phone: string,
+    name?: string,
+  ): Promise<CustomerRecord>;
   insertScan(record: Omit<ScanRecord, "id" | "scannedAt">): Promise<ScanRecord>;
   hasRecentScan(customerId: string, withinSeconds: number): Promise<boolean>;
   countScans(businessId: string, customerId: string): Promise<number>;
   listCustomers(businessId: string): Promise<CustomerRecord[]>;
+}
+
+export interface CustomerSessionRepository {
+  findSessionById(sessionId: string): Promise<CustomerSessionRecord | null>;
+  createSession(input: {
+    businessId: string;
+    customerId: string;
+    phone: string;
+  }): Promise<CustomerSessionRecord>;
 }
 
 export interface AdminRepository {

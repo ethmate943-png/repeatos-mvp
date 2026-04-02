@@ -11,6 +11,8 @@ async function migrate() {
     console.log("Migration completed: 003_core_alignment.sql");
     await runSqlFile("infra/sql/004_points_config.sql");
     console.log("Migration completed: 004_points_config.sql");
+    await runSqlFile("infra/sql/005_customer_name_and_sessions.sql");
+    console.log("Migration completed: 005_customer_name_and_sessions.sql");
   } finally {
     await pool.end();
   }

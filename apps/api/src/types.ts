@@ -1,6 +1,8 @@
 export type ScanRequest = {
   token: string;
-  phone: string;
+  phone?: string;
+  name?: string;
+  session_id?: string;
 };
 
 export type RewardResult = {
@@ -14,4 +16,5 @@ export type ScanResponse = {
   visit_count: number;
   points_balance: number;
   reward: RewardResult;
+  session_id?: string;
 };

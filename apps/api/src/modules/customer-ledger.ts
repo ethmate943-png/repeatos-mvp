@@ -10,11 +10,16 @@ export class CustomerLedgerService {
   async recordCheckin(input: {
     businessId: string;
     phone: string;
+    name?: string;
     token: string;
     ip?: string;
     userAgent?: string;
   }) {
-    const customer = await this.repository.upsertVisit(input.businessId, input.phone);
+    const customer = await this.repository.upsertVisit(
+      input.businessId,
+      input.phone,
+      input.name,
+    );
     const previousScans = await this.repository.countScans(input.businessId, customer.id);
     const currentVisitCount = previousScans + 1;
     

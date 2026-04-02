@@ -28,6 +28,7 @@ type ScanResponse = {
         expires_at: string;
       }
     | null;
+  session_id?: string;
 };
 
 type ErrorResponse = {
@@ -38,6 +39,33 @@ type ErrorResponse = {
 const DEFAULT_API_BASE = "https://api.repeatos.co";
 const DEFAULT_COLOR = "#ff5722";
 const DEFAULT_REWARD_VISITS = 5;
+
+function normalizeNigeriaPhone(phoneRaw: string): string | null {
+  const phone = phoneRaw.trim().replace(/\s+/g, "");
+
+  // Accept: +234XXXXXXXXXX or 0XXXXXXXXXX
+  // Typical mobile numbers are 10 digits after the country code.
+  if (phone.startsWith("+234")) {
+    const rest = phone.slice(4);
+    if (/^\d{9,10}$/.test(rest)) return `+234${rest}`;
+    return null;
+  }
+
+  if (phone.startsWith("0")) {
+    const rest = phone.slice(1);
+    if (/^\d{9,10}$/.test(rest)) return `+234${rest}`;
+    return null;
+  }
+
+  // Also accept raw digits "234XXXXXXXXXX"
+  if (phone.startsWith("234")) {
+    const rest = phone.slice(3);
+    if (/^\d{9,10}$/.test(rest)) return `+234${rest}`;
+    return null;
+  }
+
+  return null;
+}
 
 function injectStyles(primaryColor: string): void {
   if (document.getElementById("repeatos-widget-styles")) return;
@@ -341,7 +369,7 @@ function getErrorMessage(code: string, fallback: string): string {
     case "ORIGIN_NOT_ALLOWED":
       return "This check-in page is not authorized.";
     case "INVALID_PAYLOAD":
-      return "Please enter a valid phone number.";
+      return "Phone must start with +234 or 0 (e.g. +2348012345678 or 08012345678).";
     default:
       return fallback || "Something went wrong. Please try again.";
   }
@@ -369,6 +397,23 @@ function initWidget(): void {
   let lastError = "";
   let isOpen = mode === "inline";
 
+  // Opaque per-device session id for returning customers (not stored on backend).
+  const sessionKey = `repeatos_session_${cfg.token}`;
+  const nameKey = `repeatos_customer_name_${cfg.token}`;
+  let sessionId = "";
+  let hasSessionId = false;
+  let customerName = "";
+  try {
+    sessionId = window.localStorage.getItem(sessionKey) ?? "";
+    hasSessionId = Boolean(sessionId);
+    customerName = window.localStorage.getItem(nameKey) ?? "";
+  } catch {
+    // localStorage might be blocked; we'll just treat it as first-time.
+    sessionId = "";
+    hasSessionId = false;
+    customerName = "";
+  }
+
   let backdropEl: HTMLDivElement | null = null;
   let modalEl: HTMLDivElement | null = null;
   let triggerEl: HTMLButtonElement | null = null;
@@ -381,6 +426,12 @@ function initWidget(): void {
     if (triggerEl) triggerEl.style.display = "none";
     document.body.style.overflow = "hidden";
     setTimeout(() => {
+      const nameInput = document.getElementById("ros-name") as HTMLInputElement | null;
+      if (nameInput) {
+        nameInput.focus();
+        return;
+      }
+
       const phoneInput = document.getElementById("ros-phone") as HTMLInputElement | null;
       phoneInput?.focus();
     }, 350);
@@ -467,31 +518,71 @@ function initWidget(): void {
   }
 
   function renderIdle(): void {
+    if (hasSessionId) {
+      const safeName = customerName
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+      bodyEl!.innerHTML = `
+        <h3 class="ros-title">${safeName ? `Welcome back, ${safeName}` : "Welcome back"}</h3>
+        <p class="ros-subtitle">Tap to check in again</p>
+        <button id="ros-submit" class="ros-btn">Check In</button>
+        <p class="ros-branding"><a href="#">Powered by RepeatOS</a></p>
+      `;
+
+      const submitBtn = document.getElementById("ros-submit") as HTMLButtonElement;
+      submitBtn.addEventListener("click", () => {
+        void doReturningCheckin();
+      });
+      return;
+    }
+
     bodyEl!.innerHTML = `
       <h3 class="ros-title">${businessName}</h3>
-      <p class="ros-subtitle">Enter your phone to check in</p>
+      <p class="ros-subtitle">Enter your name and phone to check in</p>
+      <input type="text" id="ros-name" class="ros-input"
+        placeholder="Full name" autocomplete="name" inputmode="text">
       <input type="tel" id="ros-phone" class="ros-input"
         placeholder="+234 xxx xxx xxxx" autocomplete="tel" inputmode="tel">
       <button id="ros-submit" class="ros-btn">Check In</button>
       <p class="ros-branding"><a href="#">Powered by RepeatOS</a></p>
     `;
 
+    const nameInput = document.getElementById("ros-name") as HTMLInputElement;
     const phoneInput = document.getElementById("ros-phone") as HTMLInputElement;
     const submitBtn = document.getElementById("ros-submit") as HTMLButtonElement;
 
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitBtn.click();
+    });
     phoneInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitBtn.click();
     });
 
     submitBtn.addEventListener("click", () => {
+      const name = nameInput.value.trim();
       const phone = phoneInput.value.trim();
-      if (phone.length < 7) {
-        lastError = "Please enter a valid phone number.";
+
+      if (name.length < 2) {
+        lastError = "Please enter your name.";
         state = "error";
         render();
         return;
       }
-      doCheckin(phone);
+
+      const normalizedPhone = normalizeNigeriaPhone(phone);
+      if (!normalizedPhone) {
+        lastError =
+          "Phone must start with +234 or 0 (e.g. +2348012345678 or 08012345678).";
+        state = "error";
+        render();
+        return;
+      }
+
+      void doFirstTimeCheckin({ name, phone: normalizedPhone });
     });
   }
 
@@ -577,7 +668,10 @@ function initWidget(): void {
     });
   }
 
-  async function doCheckin(phone: string): Promise<void> {
+  async function doFirstTimeCheckin(input: {
+    name: string;
+    phone: string;
+  }): Promise<void> {
     state = "loading";
     render();
 
@@ -585,7 +679,57 @@ function initWidget(): void {
       const res = await fetch(`${apiBase}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: cfg!.token, phone }),
+        body: JSON.stringify({ token: cfg!.token, phone: input.phone, name: input.name }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as Partial<ErrorResponse>;
+        lastError = getErrorMessage(body.code ?? "", body.message ?? "");
+        state = "error";
+        render();
+        return;
+      }
+
+      lastResult = (await res.json()) as ScanResponse;
+
+      // On first-time check-in, backend returns a new opaque session id.
+      if (lastResult.session_id) {
+        try {
+          window.localStorage.setItem(sessionKey, lastResult.session_id);
+          sessionId = lastResult.session_id;
+          hasSessionId = true;
+          window.localStorage.setItem(nameKey, input.name);
+          customerName = input.name;
+        } catch {
+          // Ignore storage issues; user can still use the flow.
+        }
+      }
+
+      state = "success";
+      render();
+    } catch {
+      lastError = "Network error. Please check your connection and try again.";
+      state = "error";
+      render();
+    }
+  }
+
+  async function doReturningCheckin(): Promise<void> {
+    if (!sessionId) {
+      lastError = "No saved session found. Please enter your details again.";
+      state = "error";
+      render();
+      return;
+    }
+
+    state = "loading";
+    render();
+
+    try {
+      const res = await fetch(`${apiBase}/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: cfg!.token, session_id: sessionId }),
       });
 
       if (!res.ok) {

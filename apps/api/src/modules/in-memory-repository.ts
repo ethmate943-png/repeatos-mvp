@@ -1,6 +1,7 @@
 import {
   type AnalyticsRepository,
   type CustomerLedgerRepository,
+  type CustomerSessionRepository,
   type AdminRepository,
   type RewardRepository,
   type TenantRepository,
@@ -13,6 +14,7 @@ import {
 import { randomUUID } from "node:crypto";
 import type {
   CustomerRecord,
+  CustomerSessionRecord,
   ScanRecord,
   TenantContext,
   WidgetRecord,
@@ -30,6 +32,7 @@ export class InMemoryRepository
   implements
     TenantRepository,
     CustomerLedgerRepository,
+    CustomerSessionRepository,
     AdminRepository,
     RewardRepository,
     AnalyticsRepository,
@@ -62,6 +65,7 @@ export class InMemoryRepository
   ]);
 
   private customers = new Map<string, CustomerRecord>();
+  private customerSessions = new Map<string, CustomerSessionRecord>();
   private scans: ScanRecord[] = [];
   private orders = new Map<string, OrderRecord>();
   private pointsLedger: PointsLedgerRecord[] = [];
@@ -148,7 +152,11 @@ export class InMemoryRepository
     return this.customers.get(`${businessId}:${phone}`) ?? null;
   }
 
-  async upsertVisit(businessId: string, phone: string): Promise<CustomerRecord> {
+  async upsertVisit(
+    businessId: string,
+    phone: string,
+    name?: string,
+  ): Promise<CustomerRecord> {
     const key = `${businessId}:${phone}`;
     const existing = this.customers.get(key);
     const timestamp = now();
@@ -158,6 +166,7 @@ export class InMemoryRepository
         id: `cus_${randomUUID()}`,
         businessId,
         phone,
+        name,
         firstSeen: timestamp,
         lastSeen: timestamp,
       };
@@ -168,9 +177,41 @@ export class InMemoryRepository
     const updated: CustomerRecord = {
       ...existing,
       lastSeen: timestamp,
+      name: existing.name ?? name,
     };
     this.customers.set(key, updated);
     return updated;
+  }
+
+  async findSessionById(
+    sessionId: string,
+  ): Promise<CustomerSessionRecord | null> {
+    const existing = this.customerSessions.get(sessionId);
+    if (!existing) return null;
+    const updated: CustomerSessionRecord = {
+      ...existing,
+      lastSeen: now(),
+    };
+    this.customerSessions.set(sessionId, updated);
+    return updated;
+  }
+
+  async createSession(input: {
+    businessId: string;
+    customerId: string;
+    phone: string;
+  }): Promise<CustomerSessionRecord> {
+    const id = randomUUID();
+    const created: CustomerSessionRecord = {
+      id,
+      businessId: input.businessId,
+      customerId: input.customerId,
+      phone: input.phone,
+      createdAt: now(),
+      lastSeen: now(),
+    };
+    this.customerSessions.set(id, created);
+    return created;
   }
 
   async insertScan(record: Omit<ScanRecord, "id" | "scannedAt">): Promise<ScanRecord> {

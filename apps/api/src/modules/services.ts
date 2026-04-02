@@ -24,6 +24,7 @@ export const checkinDomain = new CheckinDomainService(
   tenantSecurity,
   antiAbuse,
   customerLedger,
+  repository,
   loyaltyEngine,
 );
 

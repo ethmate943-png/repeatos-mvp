@@ -13,7 +13,9 @@ export type Reward = {
 
 export type CheckinRequestContext = {
   token: string;
-  phone: string;
+  phone?: string;
+  name?: string;
+  sessionId?: string;
   origin?: string;
   ip?: string;
   userAgent?: string;
@@ -23,6 +25,7 @@ export type CheckinResult = {
   visitCount: number;
   pointsBalance: number;
   reward: Reward;
+  sessionId?: string;
 };
 
 export type ScanRecord = {
@@ -41,7 +44,17 @@ export type CustomerRecord = {
   id: string;
   businessId: string;
   phone: string;
+  name?: string;
   firstSeen: Date;
+  lastSeen: Date;
+};
+
+export type CustomerSessionRecord = {
+  id: string;
+  businessId: string;
+  customerId: string;
+  phone: string;
+  createdAt: Date;
   lastSeen: Date;
 };
 

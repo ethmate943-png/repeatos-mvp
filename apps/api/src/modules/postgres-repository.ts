@@ -4,6 +4,7 @@ import type {
   AdminRepository,
   AnalyticsRepository,
   CustomerLedgerRepository,
+  CustomerSessionRepository,
   MenuRepository,
   OrderRepository,
   PointsLedgerRepository,
@@ -14,6 +15,7 @@ import type {
 } from "./repository.js";
 import type {
   AdminRecord,
+  CustomerSessionRecord,
   CustomerRecord,
   MenuItemRecord,
   OrderRecord,
@@ -30,6 +32,7 @@ export class PostgresRepository
   implements
     TenantRepository,
     CustomerLedgerRepository,
+    CustomerSessionRepository,
     AdminRepository,
     RewardRepository,
     AnalyticsRepository,
@@ -40,6 +43,81 @@ export class PostgresRepository
     MenuRepository
 {
   constructor(private readonly pool: Pool) {}
+
+  async findSessionById(
+    sessionId: string,
+  ): Promise<CustomerSessionRecord | null> {
+    const res = await this.pool.query<{
+      id: string;
+      business_id: string;
+      customer_id: string;
+      phone: string;
+      created_at: Date;
+      last_seen: Date;
+    }>(
+      `
+        UPDATE customer_sessions
+        SET last_seen = NOW()
+        WHERE id = $1
+        RETURNING id,
+          business_id,
+          customer_id,
+          phone,
+          created_at,
+          last_seen
+      `,
+      [sessionId],
+    );
+
+    if (res.rows.length === 0) return null;
+    const row = res.rows[0];
+    return {
+      id: row.id,
+      businessId: row.business_id,
+      customerId: row.customer_id,
+      phone: row.phone,
+      createdAt: row.created_at,
+      lastSeen: row.last_seen,
+    };
+  }
+
+  async createSession(input: {
+    businessId: string;
+    customerId: string;
+    phone: string;
+  }): Promise<CustomerSessionRecord> {
+    const id = randomUUID();
+    const res = await this.pool.query<{
+      id: string;
+      business_id: string;
+      customer_id: string;
+      phone: string;
+      created_at: Date;
+      last_seen: Date;
+    }>(
+      `
+        INSERT INTO customer_sessions (id, business_id, customer_id, phone)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id,
+          business_id,
+          customer_id,
+          phone,
+          created_at,
+          last_seen
+      `,
+      [id, input.businessId, input.customerId, input.phone],
+    );
+
+    const row = res.rows[0];
+    return {
+      id: row.id,
+      businessId: row.business_id,
+      customerId: row.customer_id,
+      phone: row.phone,
+      createdAt: row.created_at,
+      lastSeen: row.last_seen,
+    };
+  }
 
   async findTenantByToken(token: string): Promise<TenantContext | null> {
     const result = await this.pool.query<{
@@ -87,26 +165,40 @@ export class PostgresRepository
     phone: string,
   ): Promise<CustomerRecord | null> {
     const res = await this.pool.query(
-      "SELECT id, business_id as \"businessId\", phone, first_seen as \"firstSeen\", last_seen as \"lastSeen\" FROM customers WHERE business_id = $1 AND phone = $2",
+      "SELECT id, business_id as \"businessId\", phone, name, first_seen as \"firstSeen\", last_seen as \"lastSeen\" FROM customers WHERE business_id = $1 AND phone = $2",
       [businessId, phone],
     );
 
     if (res.rows.length === 0) return null;
-    return res.rows[0];
+    const row = res.rows[0] as any;
+    return {
+      ...row,
+      name: row.name ?? undefined,
+    } as CustomerRecord;
   }
 
-  async upsertVisit(businessId: string, phone: string): Promise<CustomerRecord> {
+  async upsertVisit(
+    businessId: string,
+    phone: string,
+    name?: string,
+  ): Promise<CustomerRecord> {
     const id = randomUUID();
     const res = await this.pool.query(
-      `INSERT INTO customers (id, business_id, phone, first_seen, last_seen)
-       VALUES ($1, $2, $3, NOW(), NOW())
+      `INSERT INTO customers (id, business_id, phone, name, first_seen, last_seen)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (business_id, phone)
-       DO UPDATE SET last_seen = NOW()
-       RETURNING id, business_id as "businessId", phone, first_seen as "firstSeen", last_seen as "lastSeen"`,
-      [id, businessId, phone],
+       DO UPDATE SET
+         last_seen = NOW(),
+         name = CASE
+           WHEN customers.name IS NULL OR customers.name = '' THEN COALESCE(EXCLUDED.name, customers.name)
+           ELSE customers.name
+         END
+       RETURNING id, business_id as "businessId", phone, name, first_seen as "firstSeen", last_seen as "lastSeen"`,
+      [id, businessId, phone, name ?? null],
     );
 
-    return res.rows[0];
+    const row = res.rows[0] as any;
+    return { ...row, name: row.name ?? undefined } as CustomerRecord;
   }
 
   async insertScan(
@@ -182,11 +274,11 @@ export class PostgresRepository
 
   async listCustomers(businessId: string): Promise<CustomerRecord[]> {
     const res = await this.pool.query(
-      `SELECT id, business_id as "businessId", phone, first_seen as "firstSeen", last_seen as "lastSeen"
+      `SELECT id, business_id as "businessId", phone, name, first_seen as "firstSeen", last_seen as "lastSeen"
        FROM customers WHERE business_id = $1 ORDER BY last_seen DESC`,
       [businessId],
     );
-    return res.rows;
+    return res.rows.map((row: any) => ({ ...row, name: row.name ?? undefined })) as CustomerRecord[];
   }
 
   // --- AdminRepository ---
