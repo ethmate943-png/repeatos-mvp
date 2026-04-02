@@ -419,6 +419,37 @@ function initWidget(): void {
   let triggerEl: HTMLButtonElement | null = null;
   let bodyEl: HTMLDivElement | null = null;
 
+  async function resolveCustomerNameFromSession(): Promise<void> {
+    if (!hasSessionId || customerName) return;
+
+    try {
+      const res = await fetch(`${apiBase}/session-info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: cfg!.token, session_id: sessionId }),
+      });
+
+      if (!res.ok) return;
+
+      const data = (await res.json().catch(() => ({}))) as {
+        customer_name?: string | null;
+      };
+
+      if (typeof data.customer_name === "string" && data.customer_name.trim()) {
+        customerName = data.customer_name.trim();
+        try {
+          window.localStorage.setItem(nameKey, customerName);
+        } catch {
+          // Ignore localStorage write failures.
+        }
+      }
+    } catch {
+      // Ignore network errors; widget can still function without the name.
+    } finally {
+      if (state === "idle" && bodyEl) render();
+    }
+  }
+
   function open(): void {
     isOpen = true;
     if (backdropEl) backdropEl.classList.add("ros-backdrop--visible");
@@ -752,6 +783,7 @@ function initWidget(): void {
 
   buildShell();
   if (mode === "inline") render();
+  void resolveCustomerNameFromSession();
 }
 
 if (document.readyState === "loading") {

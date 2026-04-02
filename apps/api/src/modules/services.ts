@@ -5,6 +5,7 @@ import { CheckinDomainService } from "./checkin-domain.js";
 import { CustomerLedgerService } from "./customer-ledger.js";
 import { LoyaltyEngine } from "./loyalty-engine.js";
 import { PostgresRepository } from "./postgres-repository.js";
+import { SessionInfoService } from "./session-info.js";
 import { TenantSecurityService } from "./tenant-security.js";
 import { WidgetService } from "./widget-service.js";
 import { config } from "../config.js";
@@ -26,6 +27,12 @@ export const checkinDomain = new CheckinDomainService(
   customerLedger,
   repository,
   loyaltyEngine,
+);
+
+export const sessionInfoService = new SessionInfoService(
+  tenantSecurity,
+  repository,
+  customerLedger,
 );
 
 export const adminAnalytics = new AdminAnalyticsService(repository);

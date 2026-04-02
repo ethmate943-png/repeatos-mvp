@@ -10,6 +10,7 @@ import { adminRoutes } from "./routes/admin.js";
 import { adminUserRoutes } from "./routes/admin-users.js";
 import { healthRoutes } from "./routes/health.js";
 import { scanRoutes } from "./routes/scan.js";
+import { sessionInfoRoutes } from "./routes/session-info.js";
 import { widgetRoutes } from "./routes/widget-routes.js";
 import { orderRoutes } from "./routes/order-routes.js";
 import { pointsRoutes } from "./routes/points-routes.js";
@@ -31,6 +32,7 @@ async function buildServer() {
 
   await app.register(healthRoutes);
   await app.register(scanRoutes);
+  await app.register(sessionInfoRoutes);
   await app.register(adminRoutes);
   await app.register(adminUserRoutes);
   await app.register(widgetRoutes);
