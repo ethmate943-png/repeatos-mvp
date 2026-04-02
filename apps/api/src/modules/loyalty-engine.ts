@@ -1,117 +1,212 @@
-import type { RewardRepository, PointsLedgerRepository, VoucherRepository, TenantRepository, CustomerLedgerRepository } from "./repository.js";
-import type { Reward, OrderRecord, PointsLedgerRecord, VoucherRecord } from "./types.js";
-import { randomUUID } from "node:crypto";
+import type { PointsLedgerRepository, TenantRepository, VoucherRepository } from "./repository.js";
+import type { LoyaltyConfig, OrderRecord, Reward } from "./types.js";
+
+const DEFAULT_CONFIG: LoyaltyConfig = {
+  points_per_visit: 5000,
+  thresholds: [
+    { points: 25000, value_kobo: 5000, label: "Free Coffee" },
+    { points: 50000, value_kobo: 10000, label: "₦100 voucher" },
+    { points: 75000, value_kobo: 15000, label: "₦150 voucher" },
+  ],
+  expiry_days: 30,
+  min_order_kobo: 50000,
+  max_discount_pct: 20,
+};
+
+const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/I/1
+
+function generateVoucherCode(): string {
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += CHARS[Math.floor(Math.random() * CHARS.length)];
+  }
+  return code;
+}
+
+function addDays(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function normalizeConfig(raw: unknown): LoyaltyConfig {
+  const candidate = raw as Partial<LoyaltyConfig> | undefined;
+  if (!candidate || typeof candidate !== "object") return DEFAULT_CONFIG;
+
+  // If thresholds are missing or empty, treat as no configured loyalty.
+  if (!Array.isArray(candidate.thresholds) || candidate.thresholds.length === 0) {
+    return DEFAULT_CONFIG;
+  }
+
+  return {
+    ...DEFAULT_CONFIG,
+    ...candidate,
+    thresholds: candidate.thresholds as LoyaltyConfig["thresholds"],
+  };
+}
 
 export class LoyaltyEngine {
   constructor(
     private readonly pointsRepo: PointsLedgerRepository,
     private readonly voucherRepo: VoucherRepository,
     private readonly tenantRepo: TenantRepository,
-    private readonly customerRepo: CustomerLedgerRepository,
-    private readonly rewardRepo?: RewardRepository,
   ) {}
 
-  async processLoyaltyForOrder(order: OrderRecord) {
-    const business = await this.tenantRepo.getBusiness(order.businessId);
-    if (!business || !business.loyaltyConfig) return;
-
-    const config = business.loyaltyConfig;
-    
-    // 1. Check min_order
-    if (order.totalKobo < (config.min_order || 0)) return;
-
-    // 2. Award points based on thresholds
-    // AGENTS.md: Determine points to award from loyalty_config.thresholds based on customer's order count (or visits)
-    const scanCount = await this.customerRepo.countScans(order.businessId, order.customerId);
-    
-    // Simple logic: find matching threshold for visits
-    // Threshold example: { "visits": "1-9", "reward": 50 } OR { "visits": 10, "reward": 100 }
-    // We'll simplify: if scanCount matches a specific visit number, take that. 
-    // If it's a range, take that.
-    
-    let pointsToAward = 0;
-    if (config.thresholds) {
-      for (const t of config.thresholds) {
-        if (typeof t.visits === 'number' && t.visits === scanCount) {
-          pointsToAward = t.reward;
-          break;
-        } else if (typeof t.visits === 'string' && t.visits.includes('-')) {
-          const [min, max] = t.visits.split('-').map(Number);
-          if (scanCount >= min && scanCount <= max) {
-            pointsToAward = t.reward;
-            break;
-          }
-        }
-      }
-    }
-
-    if (pointsToAward > 0) {
-      await this.pointsRepo.addEntry({
-        businessId: order.businessId,
-        customerId: order.customerId,
-        orderId: order.id,
-        type: "award",
-        amount: pointsToAward,
-        note: `Points awarded for order ${order.id}`
-      });
-    }
-
-    // 3. Check for voucher issuance
-    const balance = await this.pointsRepo.getBalance(order.businessId, order.customerId);
-    // Vouchers are issued when a "reward threshold" is hit. 
-    // In AGENTS.md, the 'reward' in thresholds is points. 
-    // Wait, let's re-read: "If threshold crossed -> issue voucher -> write type = 'redeem' row to ledger"
-    // This implies we have separate "Voucher Thresholds". 
-    // Actually, AGENTS.md says rewards are vouchers. 
-    // "Naira-denominated vouchers are unlocked."
-    
-    // Let's assume points are redeemed for vouchers once balance >= some threshold.
-    // For now, let's implement a simple threshold: if balance >= 5000 kobo (₦50), issue voucher.
-    // We'll use config.reward_threshold if it exists, otherwise assume 5000.
-    const rewardThreshold = config.reward_threshold || 5000;
-    
-    if (balance >= rewardThreshold) {
-      const voucherCode = randomUUID().replace(/-/g, '').substring(0, 8).toUpperCase();
-      const expiryDays = config.expiry_days || 30;
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + expiryDays);
-
-      await this.voucherRepo.createVoucher({
-        businessId: order.businessId,
-        customerId: order.customerId,
-        code: voucherCode,
-        valueKobo: balance, // Use all points
-        minOrderKobo: config.min_order || 0,
-        maxDiscountPct: config.max_discount_percent || 20,
-        status: "active",
-        expiresAt
-      });
-
-      // Deduct points
-      await this.pointsRepo.addEntry({
-        businessId: order.businessId,
-        customerId: order.customerId,
-        type: "redeem",
-        amount: -balance,
-        note: `Points redeemed for voucher ${voucherCode}`
-      });
-    }
+  private async awardPoints(input: {
+    businessId: string;
+    customerId: string;
+    amount: number;
+    orderId?: string;
+    note: string;
+  }): Promise<void> {
+    await this.pointsRepo.addEntry({
+      businessId: input.businessId,
+      customerId: input.customerId,
+      orderId: input.orderId,
+      type: "award",
+      amount: input.amount,
+      note: input.note,
+    });
   }
 
-  async resolveReward(businessId: string, visitCount: number): Promise<{ label: string } | null> {
-    if (this.rewardRepo) {
-      const reward = await this.rewardRepo.findRewardByVisitCount(businessId, visitCount);
-      if (reward) return reward;
-    }
+  private findCrossedThreshold(
+    thresholds: LoyaltyConfig["thresholds"],
+    balance: number,
+  ): LoyaltyConfig["thresholds"][number] | null {
+    const sorted = [...thresholds].sort((a, b) => b.points - a.points);
+    return sorted.find((t) => balance >= t.points) ?? null;
+  }
 
-    const business = await this.tenantRepo.getBusiness(businessId);
-    if (!business?.loyaltyConfig?.thresholds) return null;
+  async processLoyaltyForOrder(order: OrderRecord): Promise<void> {
+    const business = await this.tenantRepo.getBusiness(order.businessId);
+    const config = normalizeConfig(business?.loyaltyConfig);
 
-    for (const t of business.loyaltyConfig.thresholds) {
-      if (typeof t.visits === "number" && t.visits === visitCount) {
-        return { label: `${t.reward / 1000} Point Reward` };
+    if (!config || order.totalKobo < config.min_order_kobo) return;
+
+    await this.awardPoints({
+      businessId: order.businessId,
+      customerId: order.customerId,
+      orderId: order.id,
+      amount: config.points_per_visit,
+      note: `Order ${order.id} accepted`,
+    });
+
+    const balanceAfterAward = await this.pointsRepo.getBalance(
+      order.businessId,
+      order.customerId,
+    );
+    const crossed = this.findCrossedThreshold(config.thresholds, balanceAfterAward);
+    if (!crossed) return;
+
+    // 5 attempts on unique voucher code collision.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateVoucherCode();
+      const expiresAt = addDays(config.expiry_days);
+      try {
+        await this.voucherRepo.createVoucher({
+          businessId: order.businessId,
+          customerId: order.customerId,
+          code,
+          valueKobo: crossed.value_kobo,
+          minOrderKobo: config.min_order_kobo,
+          maxDiscountPct: config.max_discount_pct,
+          status: "active",
+          expiresAt,
+        });
+
+        await this.pointsRepo.addEntry({
+          businessId: order.businessId,
+          customerId: order.customerId,
+          orderId: order.id,
+          type: "redeem",
+          amount: -crossed.points,
+          note: `Voucher reserved (${code})`,
+        });
+        return;
+      } catch (err) {
+        lastErr = err;
       }
     }
-    return null;
+
+    if (lastErr instanceof Error) throw lastErr;
+    throw new Error("Failed to issue voucher after multiple attempts");
+  }
+
+  async resolveReward(
+    businessId: string,
+    customerId: string,
+    visitCount: number,
+  ): Promise<{ pointsBalance: number; reward: Reward }> {
+    const business = await this.tenantRepo.getBusiness(businessId);
+    const config = normalizeConfig(business?.loyaltyConfig);
+
+    await this.awardPoints({
+      businessId,
+      customerId,
+      amount: config.points_per_visit,
+      note: `Visit #${visitCount} check-in`,
+    });
+
+    const balanceAfterAward = await this.pointsRepo.getBalance(
+      businessId,
+      customerId,
+    );
+
+    const crossed = this.findCrossedThreshold(config.thresholds, balanceAfterAward);
+    if (!crossed) {
+      return {
+        pointsBalance: balanceAfterAward,
+        reward: null,
+      };
+    }
+
+    // 5 attempts on unique voucher code collision.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateVoucherCode();
+      const expiresAt = addDays(config.expiry_days);
+
+      try {
+        const voucher = await this.voucherRepo.createVoucher({
+          businessId,
+          customerId,
+          code,
+          valueKobo: crossed.value_kobo,
+          minOrderKobo: config.min_order_kobo,
+          maxDiscountPct: config.max_discount_pct,
+          status: "active",
+          expiresAt,
+        });
+
+        await this.pointsRepo.addEntry({
+          businessId,
+          customerId,
+          type: "redeem",
+          amount: -crossed.points,
+          note: `Voucher reserved (${code})`,
+        });
+
+        const finalBalance = await this.pointsRepo.getBalance(
+          businessId,
+          customerId,
+        );
+
+        return {
+          pointsBalance: finalBalance,
+          reward: {
+            label: crossed.label,
+            code: voucher.code,
+            valueKobo: voucher.valueKobo,
+            expiresAt: voucher.expiresAt,
+          },
+        };
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (lastErr instanceof Error) throw lastErr;
+    throw new Error("Failed to issue voucher after multiple attempts");
   }
 }

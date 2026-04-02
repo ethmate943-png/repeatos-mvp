@@ -19,7 +19,15 @@ type WidgetState = "idle" | "loading" | "success" | "error";
 
 type ScanResponse = {
   visit_count: number;
-  reward: { label: string } | null;
+  points_balance: number;
+  reward:
+    | {
+        label: string;
+        code: string;
+        value_kobo: number;
+        expires_at: string;
+      }
+    | null;
 };
 
 type ErrorResponse = {
@@ -498,9 +506,11 @@ function initWidget(): void {
   function renderSuccess(): void {
     if (!lastResult) return;
 
-    const { visit_count, reward } = lastResult;
+    const { visit_count, reward, points_balance } = lastResult;
     const pct = Math.min((visit_count / rewardVisits) * 100, 100);
     const remaining = Math.max(rewardVisits - visit_count, 0);
+    const pointsNaira = Math.max(Math.floor(points_balance / 100), 0);
+    const pointsText = `₦${pointsNaira.toLocaleString("en-NG")}`;
 
     let dotsHtml = "";
     for (let i = 1; i <= rewardVisits; i++) {
@@ -511,8 +521,14 @@ function initWidget(): void {
     const rewardBanner = reward
       ? `<div class="ros-reward-banner">
           <span class="ros-confetti-emoji">🎉</span>
-          <small>Reward Unlocked</small>
+          <small>Voucher Unlocked</small>
           <strong>${reward.label}</strong>
+          <div style="margin-top:10px; font-size:13px; font-weight:600;">
+            Code: ${reward.code}
+          </div>
+          <small>Expires ${new Date(reward.expires_at).toLocaleDateString(
+            "en-GB",
+          )}</small>
         </div>`
       : "";
 
@@ -525,6 +541,7 @@ function initWidget(): void {
       <div class="ros-success-header">
         <div class="ros-check">${CHECK_SVG}</div>
         <h3 class="ros-title">Visit #${visit_count}</h3>
+        <p class="ros-subtitle" style="margin-top:6px;">Points: ${pointsText}</p>
       </div>
       ${rewardBanner}
       <div class="ros-dots">${dotsHtml}</div>

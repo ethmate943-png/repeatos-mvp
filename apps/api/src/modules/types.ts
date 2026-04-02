@@ -6,6 +6,9 @@ export type TenantContext = {
 
 export type Reward = {
   label: string;
+  code: string;
+  valueKobo: number;
+  expiresAt: Date;
 } | null;
 
 export type CheckinRequestContext = {
@@ -18,6 +21,7 @@ export type CheckinRequestContext = {
 
 export type CheckinResult = {
   visitCount: number;
+  pointsBalance: number;
   reward: Reward;
 };
 
@@ -50,10 +54,15 @@ export type WidgetRecord = {
 };
 
 export type LoyaltyConfig = {
-  thresholds: { visits: string | number; reward: number }[];
+  points_per_visit: number;
+  thresholds: Array<{
+    points: number;
+    value_kobo: number;
+    label: string;
+  }>;
   expiry_days: number;
-  min_order: number;
-  max_discount_percent: number;
+  min_order_kobo: number;
+  max_discount_pct: number;
 };
 
 export enum OrderStatus {

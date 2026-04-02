@@ -19,7 +19,7 @@ const customer: CustomerRecord = {
 };
 
 describe("CheckinDomainService", () => {
-  it("executes full checkin and returns visit count + reward", async () => {
+  it("executes full checkin and returns visit count + points + reward", async () => {
     const service = new CheckinDomainService(
       {
         resolveTenantFromToken: async () => tenant,
@@ -33,7 +33,15 @@ describe("CheckinDomainService", () => {
         recordCheckin: async () => ({ customer, visitCount: 5 }),
       },
       {
-        resolveReward: async () => ({ label: "Free Coffee" }),
+        resolveReward: async () => ({
+          pointsBalance: 0,
+          reward: {
+            label: "Free Coffee",
+            code: "ABCDEFGH",
+            valueKobo: 5000,
+            expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+          },
+        }),
       },
     );
 
@@ -44,7 +52,13 @@ describe("CheckinDomainService", () => {
     });
 
     expect(result.visitCount).toBe(5);
-    expect(result.reward).toEqual({ label: "Free Coffee" });
+    expect(result.pointsBalance).toBe(0);
+    expect(result.reward).toEqual({
+      label: "Free Coffee",
+      code: "ABCDEFGH",
+      valueKobo: 5000,
+      expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+    });
   });
 
   it("returns null reward when no threshold matches", async () => {
@@ -61,7 +75,7 @@ describe("CheckinDomainService", () => {
         recordCheckin: async () => ({ customer, visitCount: 1 }),
       },
       {
-        resolveReward: async () => null,
+        resolveReward: async () => ({ pointsBalance: 1000, reward: null }),
       },
     );
 
@@ -72,6 +86,7 @@ describe("CheckinDomainService", () => {
     });
 
     expect(result.visitCount).toBe(1);
+    expect(result.pointsBalance).toBe(1000);
     expect(result.reward).toBeNull();
   });
 });

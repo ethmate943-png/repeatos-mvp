@@ -18,7 +18,7 @@ const repository = new PostgresRepository(pool);
 export const tenantSecurity = new TenantSecurityService(repository);
 const antiAbuse = new AntiAbuseService(repository, config.scanCooldownSeconds);
 export const customerLedger = new CustomerLedgerService(repository);
-const loyaltyEngine = new LoyaltyEngine(repository, repository, repository, repository, repository);
+const loyaltyEngine = new LoyaltyEngine(repository, repository, repository);
 
 export const checkinDomain = new CheckinDomainService(
   tenantSecurity,

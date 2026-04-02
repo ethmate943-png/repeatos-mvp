@@ -33,7 +33,15 @@ export async function scanRoutes(app: FastifyInstance) {
 
       const response: ScanResponse = {
         visit_count: result.visitCount,
-        reward: result.reward,
+        points_balance: result.pointsBalance,
+        reward: result.reward
+          ? {
+              label: result.reward.label,
+              code: result.reward.code,
+              value_kobo: result.reward.valueKobo,
+              expires_at: result.reward.expiresAt.toISOString(),
+            }
+          : null,
       };
 
       return reply.status(200).send(response);

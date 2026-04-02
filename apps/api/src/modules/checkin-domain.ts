@@ -2,6 +2,7 @@ import type {
   CheckinRequestContext,
   CheckinResult,
   CustomerRecord,
+  Reward,
   TenantContext,
 } from "./types.js";
 
@@ -31,8 +32,9 @@ type CustomerLedgerPort = {
 type LoyaltyEnginePort = {
   resolveReward(
     businessId: string,
+    customerId: string,
     visitCount: number,
-  ): Promise<{ label: string } | null>;
+  ): Promise<{ pointsBalance: number; reward: Reward }>;
 };
 
 export class CheckinDomainService {
@@ -63,16 +65,19 @@ export class CheckinDomainService {
       ip: input.ip,
       userAgent: input.userAgent,
     });
-    
-    const visitCount = checkin.visitCount;
 
-    const reward = await this.loyaltyEngine.resolveReward(
+    const visitCount = checkin.visitCount;
+    const customerId = checkin.customer.id;
+
+    const { pointsBalance, reward } = await this.loyaltyEngine.resolveReward(
       tenant.businessId,
+      customerId,
       visitCount,
     );
 
     return {
       visitCount,
+      pointsBalance,
       reward,
     };
   }
