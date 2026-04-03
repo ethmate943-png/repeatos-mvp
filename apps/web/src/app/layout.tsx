@@ -1,5 +1,19 @@
 import type { Metadata } from "next";
+import { Figtree, Host_Grotesk } from "next/font/google";
+
 import "./globals.css";
+
+const figtree = Figtree({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-figtree",
+});
+
+const hostGrotesk = Host_Grotesk({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-host-grotesk",
+});
 
 export const metadata: Metadata = {
   title: "RepeatOS | Premium Hosted Menu",
@@ -12,10 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased font-sans">
-        {children}
-      </body>
+    <html lang="en" className={`${figtree.variable} ${hostGrotesk.variable}`}>
+      <body className={`${figtree.className} antialiased`}>{children}</body>
     </html>
   );
 }

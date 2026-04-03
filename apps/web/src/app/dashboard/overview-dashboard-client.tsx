@@ -12,8 +12,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { TrendUp, TrendDown, Cpu, Wallet3, ShoppingBag, People } from "iconsax-react";
-import { ON_DARK } from "@/lib/dashboard-palette";
+import {
+  TrendUp,
+  TrendDown,
+  Cpu,
+  Wallet3,
+  ShoppingBag,
+  People,
+  MenuBoard,
+  Building,
+  Setting2,
+} from "iconsax-react";
+import { ON_ACCENT, ON_DARK } from "@/lib/dashboard-palette";
 
 export type AnalyticsDashboardPayload = {
   summary: {
@@ -243,16 +253,42 @@ export function OverviewDashboardClient({
       </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <QuickLink href={`/dashboard/customers${q}`} title="Credits" desc="Balances & redemption" />
-        <QuickLink href={`/dashboard/orders${q}`} title="Orders" desc={`${d.pendingOrders} pending`} />
-        <QuickLink href={`/dashboard/users${q}`} title="Team" desc={`${d.staffCount} staff logins`} />
-        <QuickLink href={`/dashboard/menu${q}`} title="Menu" desc={`${d.menuItemsCount} items`} />
+        <QuickLink
+          href={`/dashboard/customers${q}`}
+          title="Credits"
+          desc="Balances & redemption"
+          Icon={Wallet3}
+        />
+        <QuickLink
+          href={`/dashboard/orders${q}`}
+          title="Orders"
+          desc={`${d.pendingOrders} pending`}
+          Icon={ShoppingBag}
+        />
+        <QuickLink
+          href={`/dashboard/users${q}`}
+          title="Team"
+          desc={`${d.staffCount} staff logins`}
+          Icon={People}
+        />
+        <QuickLink
+          href={`/dashboard/menu${q}`}
+          title="Menu"
+          desc={`${d.menuItemsCount} items`}
+          Icon={MenuBoard}
+        />
         <QuickLink
           href={businessId ? `/dashboard/business/${businessId}${q}` : `/dashboard/business${q}`}
           title="Business"
           desc="Venue profile"
+          Icon={Building}
         />
-        <QuickLink href={`/dashboard/settings${q}`} title="Settings" desc="Integration health" />
+        <QuickLink
+          href={`/dashboard/settings${q}`}
+          title="Settings"
+          desc="Integration health"
+          Icon={Setting2}
+        />
       </section>
     </div>
   );
@@ -313,22 +349,24 @@ function QuickLink({
   href,
   title,
   desc,
+  Icon,
 }: {
   href: string;
   title: string;
   desc: string;
+  Icon: typeof Wallet3;
 }) {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-4 rounded-2xl border border-white/10 p-5 hover:border-white/25 hover:bg-white/[0.04] transition-colors"
+      className="group flex items-center gap-4 rounded-2xl border border-white/10 p-5 transition-colors hover:border-white/25 hover:bg-white/[0.04]"
     >
-      <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-white/10">
-        <span className="text-sm font-black text-zinc-900">{title.slice(0, 1)}</span>
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-white/10">
+        <Icon size={22} variant="Bold" color={ON_ACCENT} aria-hidden />
       </div>
       <div>
-        <p className="font-bold text-sm text-white uppercase tracking-wide">{title}</p>
-        <p className="text-xs text-zinc-500 mt-0.5">{desc}</p>
+        <p className="text-sm font-bold tracking-wide text-white uppercase">{title}</p>
+        <p className="mt-0.5 text-xs text-zinc-500">{desc}</p>
       </div>
     </Link>
   );

@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  /* System stack — avoids next/font Google fetch during `next build` (offline CI / strict networks). */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial,
-    sans-serif;
+  /* Body: Figtree (next/font sets --font-figtree on <html>). */
+  --font-sans: var(--font-figtree), system-ui, sans-serif;
   --color-brand: #000000;
   /* High-contrast dashboard: white accent on near-black surfaces */
   --color-accent: #ffffff;
@@ -35,6 +34,7 @@ body {
 }
 
 h1, h2, h3, h4, .swiss-bold {
+  font-family: var(--font-host-grotesk), var(--font-figtree), system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.1;
