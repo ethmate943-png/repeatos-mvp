@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "ci": "npm run build && npm run build --prefix apps/web && npm test --prefix apps/api && npm run lint --prefix apps/web",
     "build": "cd apps/widget && npx vite build && cd ../../apps/api && npx tsc -p tsconfig.json",
     "start": "node apps/api/dist/server.js",
     "dev": "cd apps/api && npx tsx watch src/server.ts",

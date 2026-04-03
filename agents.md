@@ -505,3 +505,55 @@ VALUES ('<uuid>', 'owner@blisscafe.com', '<bcrypt_hash>');
 **Do not implement the four unresolved features.** Stub with a comment referencing this file.
 
 **Do not implement post-MVP features.** If you think something is a good idea and it is not in this file, it is probably post-MVP. Ask before building it.
+
+---
+
+## Tiered credit loyalty system (MVP)
+
+### The rule
+
+Credits are awarded on **check-in (scan)** by visit tier:
+
+- Visits 1–3: ₦50 (5000 kobo)
+- Visits 4–10: ₦100 (10000 kobo)
+- Visit 11+: ₦150 (15000 kobo)
+
+### Identity
+
+Customers are identified by phone; **name** is collected on first-time check-in and stored on `customers.name`. Backend upserts with `COALESCE(EXCLUDED.name, customers.name)` so a null name in a later request does not wipe an existing name.
+
+### Credit balance
+
+Always computed from `points_ledger`:
+
+```sql
+SELECT COALESCE(SUM(amount), 0) FROM points_ledger
+WHERE customer_id = $1 AND business_id = $2
+AND (expires_at IS NULL OR expires_at > now())
+```
+
+### Expiry
+
+Each award row may have `expires_at`. The balance query excludes expired rows. A nightly job may set `type = 'expire'` on stale award rows for analytics (balance still relies on `expires_at`).
+
+### Redemption
+
+Manual at MVP. Staff use `POST /admin/customers/:customerId/redeem` with `x-admin-api-key`, body: `business_id`, `amount_kobo`, `order_value_kobo`, `note`. Validation: balance ≥ `min_redemption_kobo`, amount ≤ balance, amount ≤ `max_discount_pct` of order value.
+
+### Nudge message logic
+
+- If not at max tier: show visits until next tier’s per-visit credit.
+- If at max tier and balance ≥ min redemption: prompt to redeem with staff.
+- If at max tier and balance &lt; min redemption: show how much more is needed.
+
+### Visit count
+
+Computed per check-in from the `scans` count for that customer and business (not a denormalized column on `customers`).
+
+### `loyalty_config` (JSONB)
+
+Tiered shape uses `tiers[]`, `min_redemption_kobo`, `max_discount_pct`, `expiry_days`. Values in kobo.
+
+### Money
+
+All amounts in kobo through the API; divide by 100 at display (widget and dashboards).

@@ -11,6 +11,16 @@ interface MenuItem {
   category?: string;
 }
 
+declare global {
+  interface Window {
+    REPEATOS_CONFIG?: { widgetId: string; apiUrl: string; token: string };
+  }
+}
+
+/** Browser-visible API origin (must match where Fastify + widget static files are served). */
+const publicApiBase =
+  process.env.NEXT_PUBLIC_REPEATOS_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:4000";
+
 export default function BusinessMenuPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -37,13 +47,12 @@ export default function BusinessMenuPage() {
     };
     fetchMenu();
 
-    // Initialize Widget
-    const script = document.createElement('script');
-    script.src = 'http://localhost:3001/public/widget.iife.js';
-    (window as any).REPEATOS_CONFIG = {
-      widgetId: 'demo-widget-id',
-      apiUrl: 'http://localhost:3001',
-      token: 'demo-token-1234'
+    const script = document.createElement("script");
+    script.src = `${publicApiBase}/public/widget.iife.js`;
+    window.REPEATOS_CONFIG = {
+      widgetId: "demo-widget-id",
+      apiUrl: publicApiBase,
+      token: "demo-token-1234",
     };
     document.head.appendChild(script);
   }, [slug]);
@@ -65,7 +74,7 @@ export default function BusinessMenuPage() {
     if (!phone) return;
 
     try {
-      const res = await fetch('http://localhost:3001/orders', {
+      const res = await fetch(`${publicApiBase}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
