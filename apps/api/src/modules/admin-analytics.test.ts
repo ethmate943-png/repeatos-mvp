@@ -9,6 +9,19 @@ describe("AdminAnalyticsService", () => {
         uniqueCustomers: 4,
         rewardsTriggered: 2,
       }),
+      getAnalyticsDashboard: async () => ({
+        summary: { totalScans: 10, uniqueCustomers: 4, rewardsTriggered: 2 },
+        scansByDay: [],
+        ordersByStatus: [],
+        menuItemsCount: 0,
+        staffCount: 0,
+        creditsIssuedKobo: 0,
+        creditsRedeemedKobo: 0,
+        activeVouchers: 0,
+        customersNewLast30Days: 0,
+        repeatVisitRate: 0,
+        pendingOrders: 0,
+      }),
     });
 
     await expect(service.getSummary("biz-1")).resolves.toEqual({

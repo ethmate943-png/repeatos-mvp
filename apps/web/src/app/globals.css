@@ -3,7 +3,9 @@
 @theme {
   --font-sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --color-brand: #000000;
-  --color-accent: #ff0033;
+  /* High-contrast dashboard: white accent on near-black surfaces */
+  --color-accent: #ffffff;
+  --color-accent-foreground: #0a0a0a;
 }
 
 :root {

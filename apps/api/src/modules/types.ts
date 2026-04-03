@@ -11,6 +11,14 @@ export type Reward = {
   expiresAt: Date;
 } | null;
 
+/** Tiered credit result from LoyaltyEngine.resolveReward (check-in). */
+export type CreditResult = {
+  creditsEarned: number;
+  creditBalance: number;
+  nudgeMessage: string;
+  tierLabel: string;
+};
+
 export type CheckinRequestContext = {
   token: string;
   phone?: string;
@@ -23,8 +31,9 @@ export type CheckinRequestContext = {
 
 export type CheckinResult = {
   visitCount: number;
-  pointsBalance: number;
-  reward: Reward;
+  customerName: string | null;
+  credits: CreditResult;
+  reward: null;
   sessionId?: string;
 };
 
@@ -66,16 +75,18 @@ export type WidgetRecord = {
   createdAt: Date;
 };
 
-export type LoyaltyConfig = {
-  points_per_visit: number;
-  thresholds: Array<{
-    points: number;
-    value_kobo: number;
-    label: string;
-  }>;
-  expiry_days: number;
-  min_order_kobo: number;
+/** Per-business tiered credits (stored in `businesses.loyalty_config`, kobo). */
+export type LoyaltyTier = {
+  from: number;
+  to: number | null;
+  credits_kobo: number;
+};
+
+export type TieredLoyaltyConfig = {
+  tiers: LoyaltyTier[];
+  min_redemption_kobo: number;
   max_discount_pct: number;
+  expiry_days: number;
 };
 
 export enum OrderStatus {
@@ -115,6 +126,7 @@ export type PointsLedgerRecord = {
   amount: number;
   note?: string;
   createdAt: Date;
+  expiresAt?: Date;
 };
 
 export type VoucherStatus = "active" | "redeemed" | "expired";

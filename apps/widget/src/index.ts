@@ -1,8 +1,6 @@
 interface RepeatOSConfig {
   token: string;
   businessName?: string;
-  rewardLabel?: string;
-  rewardVisits?: number;
   apiBaseUrl?: string;
   primaryColor?: string;
   mode?: "modal" | "inline";
@@ -19,15 +17,12 @@ type WidgetState = "idle" | "loading" | "success" | "error";
 
 type ScanResponse = {
   visit_count: number;
-  points_balance: number;
-  reward:
-    | {
-        label: string;
-        code: string;
-        value_kobo: number;
-        expires_at: string;
-      }
-    | null;
+  customer_name: string | null;
+  credits_earned: number;
+  credit_balance: number;
+  tier_label: string;
+  nudge_message: string;
+  reward: null;
   session_id?: string;
 };
 
@@ -38,8 +33,6 @@ type ErrorResponse = {
 
 const DEFAULT_API_BASE = "https://api.repeatos.co";
 const DEFAULT_COLOR = "#ff5722";
-const DEFAULT_REWARD_VISITS = 5;
-
 function normalizeNigeriaPhone(phoneRaw: string): string | null {
   const phone = phoneRaw.trim().replace(/\s+/g, "");
 
@@ -385,8 +378,6 @@ function initWidget(): void {
   const apiBase = (cfg.apiBaseUrl ?? DEFAULT_API_BASE).replace(/\/$/, "");
   const color = cfg.primaryColor ?? DEFAULT_COLOR;
   const businessName = cfg.businessName ?? "Check In";
-  const rewardVisits = cfg.rewardVisits ?? DEFAULT_REWARD_VISITS;
-  const rewardLabel = cfg.rewardLabel ?? "Reward";
   const mode = cfg.mode ?? "modal";
   const triggerLabel = cfg.triggerLabel ?? "Check In";
 
@@ -628,47 +619,33 @@ function initWidget(): void {
   function renderSuccess(): void {
     if (!lastResult) return;
 
-    const { visit_count, reward, points_balance } = lastResult;
-    const pct = Math.min((visit_count / rewardVisits) * 100, 100);
-    const remaining = Math.max(rewardVisits - visit_count, 0);
-    const pointsNaira = Math.max(Math.floor(points_balance / 100), 0);
-    const pointsText = `₦${pointsNaira.toLocaleString("en-NG")}`;
+    const {
+      visit_count,
+      customer_name,
+      credits_earned,
+      credit_balance,
+      tier_label,
+      nudge_message,
+    } = lastResult;
 
-    let dotsHtml = "";
-    for (let i = 1; i <= rewardVisits; i++) {
-      const filled = i <= visit_count ? " ros-dot--filled" : "";
-      dotsHtml += `<div class="ros-dot${filled}">${i <= visit_count ? "&#10003;" : i}</div>`;
-    }
-
-    const rewardBanner = reward
-      ? `<div class="ros-reward-banner">
-          <span class="ros-confetti-emoji">🎉</span>
-          <small>Voucher Unlocked</small>
-          <strong>${reward.label}</strong>
-          <div style="margin-top:10px; font-size:13px; font-weight:600;">
-            Code: ${reward.code}
-          </div>
-          <small>Expires ${new Date(reward.expires_at).toLocaleDateString(
-            "en-GB",
-          )}</small>
-        </div>`
-      : "";
-
-    const progressText =
-      remaining > 0
-        ? `${remaining} more visit${remaining !== 1 ? "s" : ""} until your ${rewardLabel}`
-        : "";
+    const displayName = (customer_name ?? "").trim() || customerName;
+    const greeting = displayName
+      ? `Welcome back, ${displayName.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}!`
+      : "Welcome!";
+    const balanceNaira = Math.max(credit_balance / 100, 0);
+    const balanceText = `You have ₦${balanceNaira.toLocaleString("en-NG")} Credits`;
+    const earnedNaira = credits_earned / 100;
+    const earnedLine = `+₦${earnedNaira.toLocaleString("en-NG")} earned this visit (${tier_label})`;
 
     bodyEl!.innerHTML = `
       <div class="ros-success-header">
         <div class="ros-check">${CHECK_SVG}</div>
-        <h3 class="ros-title">Visit #${visit_count}</h3>
-        <p class="ros-subtitle" style="margin-top:6px;">Points: ${pointsText}</p>
+        <h3 class="ros-title">${greeting}</h3>
+        <p class="ros-subtitle" style="margin-top:6px;">Visit #${visit_count}</p>
+        <p class="ros-subtitle" style="margin-top:4px; color:#333; font-weight:600;">${balanceText}</p>
+        <p class="ros-progress-text" style="margin-top:8px;">${earnedLine}</p>
+        <p class="ros-progress-text" style="margin-top:4px;">${nudge_message.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</p>
       </div>
-      ${rewardBanner}
-      <div class="ros-dots">${dotsHtml}</div>
-      <div class="ros-bar-track"><div class="ros-bar-fill" style="width:${pct}%"></div></div>
-      ${progressText ? `<p class="ros-progress-text">${progressText}</p>` : ""}
       <button id="ros-done" class="ros-btn ros-btn-secondary">Done</button>
       <p class="ros-branding"><a href="#">Powered by RepeatOS</a></p>
     `;
@@ -736,6 +713,15 @@ function initWidget(): void {
         }
       }
 
+      if (lastResult.customer_name?.trim()) {
+        customerName = lastResult.customer_name.trim();
+        try {
+          window.localStorage.setItem(nameKey, customerName);
+        } catch {
+          // Ignore localStorage write failures.
+        }
+      }
+
       state = "success";
       render();
     } catch {
@@ -772,6 +758,16 @@ function initWidget(): void {
       }
 
       lastResult = (await res.json()) as ScanResponse;
+
+      if (lastResult.customer_name?.trim()) {
+        customerName = lastResult.customer_name.trim();
+        try {
+          window.localStorage.setItem(nameKey, customerName);
+        } catch {
+          // Ignore localStorage write failures.
+        }
+      }
+
       state = "success";
       render();
     } catch {

@@ -4,6 +4,7 @@ import type { CustomerLedgerRepository } from "./repository.js";
 
 const baseRepo: CustomerLedgerRepository = {
   findByBusinessAndPhone: async () => null,
+  findCustomerById: async () => null,
   upsertVisit: async () => { throw new Error("unused"); },
   insertScan: async () => { throw new Error("unused"); },
   hasRecentScan: async () => false,

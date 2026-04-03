@@ -154,7 +154,16 @@ export class PostgresRepository
 
   async getBusiness(id: string): Promise<any> {
     const res = await this.pool.query(
-      `SELECT id, name, slug, loyalty_config as "loyaltyConfig" FROM businesses WHERE id = $1`,
+      `SELECT
+         id,
+         name,
+         slug,
+         integration_mode AS "integrationMode",
+         menu_url AS "menuUrl",
+         allowed_origins AS "allowedOrigins",
+         loyalty_config AS "loyaltyConfig",
+         created_at AS "createdAt"
+       FROM businesses WHERE id = $1`,
       [id],
     );
     return res.rows[0];
@@ -177,6 +186,20 @@ export class PostgresRepository
     } as CustomerRecord;
   }
 
+  async findCustomerById(
+    businessId: string,
+    customerId: string,
+  ): Promise<CustomerRecord | null> {
+    const res = await this.pool.query(
+      `SELECT id, business_id as "businessId", phone, name, first_seen as "firstSeen", last_seen as "lastSeen"
+       FROM customers WHERE business_id = $1 AND id = $2`,
+      [businessId, customerId],
+    );
+    if (res.rows.length === 0) return null;
+    const row = res.rows[0] as any;
+    return { ...row, name: row.name ?? undefined } as CustomerRecord;
+  }
+
   async upsertVisit(
     businessId: string,
     phone: string,
@@ -189,10 +212,7 @@ export class PostgresRepository
        ON CONFLICT (business_id, phone)
        DO UPDATE SET
          last_seen = NOW(),
-         name = CASE
-           WHEN customers.name IS NULL OR customers.name = '' THEN COALESCE(EXCLUDED.name, customers.name)
-           ELSE customers.name
-         END
+         name = COALESCE(EXCLUDED.name, customers.name)
        RETURNING id, business_id as "businessId", phone, name, first_seen as "firstSeen", last_seen as "lastSeen"`,
       [id, businessId, phone, name ?? null],
     );
@@ -282,6 +302,13 @@ export class PostgresRepository
   }
 
   // --- AdminRepository ---
+  async listBusinesses(): Promise<{ id: string; name: string; slug: string }[]> {
+    const res = await this.pool.query<{ id: string; name: string; slug: string }>(
+      `SELECT id, name, slug FROM businesses ORDER BY name ASC`,
+    );
+    return res.rows;
+  }
+
   async listAdmins(businessId: string): Promise<AdminRecord[]> {
     const res = await this.pool.query(
       `SELECT id, business_id as "businessId", email, password_hash as "passwordHash", created_at as "createdAt"
@@ -289,6 +316,15 @@ export class PostgresRepository
       [businessId],
     );
     return res.rows;
+  }
+
+  async findAdminById(businessId: string, adminId: string): Promise<AdminRecord | null> {
+    const res = await this.pool.query(
+      `SELECT id, business_id as "businessId", email, password_hash as "passwordHash", created_at as "createdAt"
+       FROM admins WHERE business_id = $1 AND id = $2`,
+      [businessId, adminId],
+    );
+    return res.rows[0] ?? null;
   }
 
   async createAdmin(admin: Omit<AdminRecord, "id" | "createdAt">): Promise<AdminRecord> {
@@ -379,18 +415,28 @@ export class PostgresRepository
   async addEntry(entry: Omit<PointsLedgerRecord, "id" | "createdAt">): Promise<PointsLedgerRecord> {
     const id = randomUUID();
     const res = await this.pool.query(
-      `INSERT INTO points_ledger (id, business_id, customer_id, order_id, type, amount, note, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       RETURNING id, business_id as "businessId", customer_id as "customerId", order_id as "orderId", type, amount, note, created_at as "createdAt"`,
-      [id, entry.businessId, entry.customerId, entry.orderId, entry.type, entry.amount, entry.note],
+      `INSERT INTO points_ledger (id, business_id, customer_id, order_id, type, amount, note, created_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+       RETURNING id, business_id as "businessId", customer_id as "customerId", order_id as "orderId", type, amount, note, created_at as "createdAt", expires_at as "expiresAt"`,
+      [
+        id,
+        entry.businessId,
+        entry.customerId,
+        entry.orderId ?? null,
+        entry.type,
+        entry.amount,
+        entry.note ?? null,
+        entry.expiresAt ?? null,
+      ],
     );
     return res.rows[0];
   }
 
   async getBalance(businessId: string, customerId: string): Promise<number> {
     const res = await this.pool.query(
-      `SELECT COALESCE(SUM(amount), 0) as balance FROM points_ledger
-       WHERE business_id = $1 AND customer_id = $2`,
+      `SELECT COALESCE(SUM(amount), 0) AS balance FROM points_ledger
+       WHERE business_id = $1 AND customer_id = $2
+         AND (expires_at IS NULL OR expires_at > NOW())`,
       [businessId, customerId],
     );
     return parseInt(res.rows[0].balance, 10);
@@ -398,11 +444,14 @@ export class PostgresRepository
 
   async listEntries(businessId: string, customerId: string): Promise<PointsLedgerRecord[]> {
     const res = await this.pool.query(
-      `SELECT id, business_id as "businessId", customer_id as "customerId", order_id as "orderId", type, amount, note, created_at as "createdAt"
+      `SELECT id, business_id as "businessId", customer_id as "customerId", order_id as "orderId", type, amount, note, created_at as "createdAt", expires_at as "expiresAt"
        FROM points_ledger WHERE business_id = $1 AND customer_id = $2 ORDER BY created_at DESC`,
       [businessId, customerId],
     );
-    return res.rows;
+    return res.rows.map((row: any) => ({
+      ...row,
+      expiresAt: row.expiresAt ?? undefined,
+    }));
   }
 
   // --- VoucherRepository ---
@@ -453,6 +502,43 @@ export class PostgresRepository
       [businessId],
     );
     return res.rows;
+  }
+
+  async listAllMenuItems(businessId: string): Promise<MenuItemRecord[]> {
+    const res = await this.pool.query(
+      `SELECT id, business_id as "businessId", name, description, price_kobo as "priceKobo", category, available, sort_order as "sortOrder", created_at as "createdAt"
+       FROM menu_items WHERE business_id = $1 ORDER BY sort_order ASC, name ASC`,
+      [businessId],
+    );
+    return res.rows;
+  }
+
+  async createMenuItem(input: {
+    businessId: string;
+    name: string;
+    description?: string | null;
+    priceKobo: number;
+    category?: string | null;
+    available: boolean;
+    sortOrder: number;
+  }): Promise<MenuItemRecord> {
+    const id = randomUUID();
+    const res = await this.pool.query(
+      `INSERT INTO menu_items (id, business_id, name, description, price_kobo, category, available, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, business_id as "businessId", name, description, price_kobo as "priceKobo", category, available, sort_order as "sortOrder", created_at as "createdAt"`,
+      [
+        id,
+        input.businessId,
+        input.name.trim(),
+        input.description?.trim() || null,
+        input.priceKobo,
+        input.category?.trim() || null,
+        input.available,
+        input.sortOrder,
+      ],
+    );
+    return res.rows[0];
   }
 
   async getItemById(id: string): Promise<MenuItemRecord | null> {
@@ -523,6 +609,125 @@ export class PostgresRepository
       totalScans: Number(totals.rows[0]?.total_scans ?? 0),
       uniqueCustomers: Number(totals.rows[0]?.unique_customers ?? 0),
       rewardsTriggered: Number(rewards.rows[0]?.rewards_triggered ?? 0),
+    };
+  }
+
+  async getAnalyticsDashboard(businessId: string): Promise<{
+    summary: {
+      totalScans: number;
+      uniqueCustomers: number;
+      rewardsTriggered: number;
+    };
+    scansByDay: { date: string; count: number }[];
+    ordersByStatus: { status: string; count: number }[];
+    menuItemsCount: number;
+    staffCount: number;
+    creditsIssuedKobo: number;
+    creditsRedeemedKobo: number;
+    activeVouchers: number;
+    customersNewLast30Days: number;
+    repeatVisitRate: number;
+    pendingOrders: number;
+  }> {
+    const summary = await this.getSummary(businessId);
+
+    const scansDay = await this.pool.query<{ d: string; c: string }>(
+      `
+        SELECT to_char((scanned_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS d,
+               COUNT(*)::text AS c
+        FROM scans
+        WHERE business_id = $1
+          AND scanned_at >= NOW() - INTERVAL '14 days'
+        GROUP BY (scanned_at AT TIME ZONE 'UTC')::date
+        ORDER BY d ASC
+      `,
+      [businessId],
+    );
+    const byDay = new Map<string, number>();
+    for (const row of scansDay.rows) {
+      byDay.set(row.d, Number(row.c));
+    }
+    const scansByDay: { date: string; count: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      scansByDay.push({ date: key, count: byDay.get(key) ?? 0 });
+    }
+
+    const ordersSt = await this.pool.query<{ status: string; c: string }>(
+      `SELECT status, COUNT(*)::text AS c FROM orders WHERE business_id = $1 GROUP BY status`,
+      [businessId],
+    );
+
+    const menuC = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM menu_items WHERE business_id = $1`,
+      [businessId],
+    );
+
+    const staffC = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM admins WHERE business_id = $1`,
+      [businessId],
+    );
+
+    const ledger = await this.pool.query<{ type: string; t: string }>(
+      `SELECT type, COALESCE(SUM(amount), 0)::text AS t FROM points_ledger WHERE business_id = $1 GROUP BY type`,
+      [businessId],
+    );
+    let creditsIssuedKobo = 0;
+    let creditsRedeemedKobo = 0;
+    for (const row of ledger.rows) {
+      if (row.type === "award") creditsIssuedKobo += Number(row.t);
+      if (row.type === "redeem") creditsRedeemedKobo += Math.abs(Number(row.t));
+    }
+
+    const vouch = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM vouchers WHERE business_id = $1 AND status = 'active'`,
+      [businessId],
+    );
+
+    const newCust = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM customers WHERE business_id = $1 AND first_seen >= NOW() - INTERVAL '30 days'`,
+      [businessId],
+    );
+
+    const repeatQ = await this.pool.query<{ with_scans: string; repeaters: string }>(
+      `
+        WITH visit_counts AS (
+          SELECT customer_id, COUNT(*) AS n
+          FROM scans
+          WHERE business_id = $1
+          GROUP BY customer_id
+        )
+        SELECT
+          COUNT(*)::text AS with_scans,
+          COUNT(*) FILTER (WHERE n > 1)::text AS repeaters
+        FROM visit_counts
+      `,
+      [businessId],
+    );
+    const ws = Number(repeatQ.rows[0]?.with_scans ?? 0);
+    const rep = Number(repeatQ.rows[0]?.repeaters ?? 0);
+    const repeatVisitRate = ws > 0 ? rep / ws : 0;
+
+    const pend = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM orders WHERE business_id = $1 AND status = 'pending'`,
+      [businessId],
+    );
+
+    return {
+      summary,
+      scansByDay,
+      ordersByStatus: ordersSt.rows.map((r) => ({ status: r.status, count: Number(r.c) })),
+      menuItemsCount: Number(menuC.rows[0]?.c ?? 0),
+      staffCount: Number(staffC.rows[0]?.c ?? 0),
+      creditsIssuedKobo,
+      creditsRedeemedKobo,
+      activeVouchers: Number(vouch.rows[0]?.c ?? 0),
+      customersNewLast30Days: Number(newCust.rows[0]?.c ?? 0),
+      repeatVisitRate,
+      pendingOrders: Number(pend.rows[0]?.c ?? 0),
     };
   }
 

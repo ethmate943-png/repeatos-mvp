@@ -22,6 +22,10 @@ export interface CustomerLedgerRepository {
     businessId: string,
     phone: string,
   ): Promise<CustomerRecord | null>;
+  findCustomerById(
+    businessId: string,
+    customerId: string,
+  ): Promise<CustomerRecord | null>;
   upsertVisit(
     businessId: string,
     phone: string,
@@ -43,7 +47,9 @@ export interface CustomerSessionRepository {
 }
 
 export interface AdminRepository {
+  listBusinesses(): Promise<{ id: string; name: string; slug: string }[]>;
   listAdmins(businessId: string): Promise<AdminRecord[]>;
+  findAdminById(businessId: string, adminId: string): Promise<AdminRecord | null>;
   createAdmin(admin: Omit<AdminRecord, "id" | "createdAt">): Promise<AdminRecord>;
   deleteAdmin(id: string): Promise<void>;
 }
@@ -70,6 +76,16 @@ export interface VoucherRepository {
 
 export interface MenuRepository {
   listItems(businessId: string): Promise<MenuItemRecord[]>;
+  listAllMenuItems(businessId: string): Promise<MenuItemRecord[]>;
+  createMenuItem(input: {
+    businessId: string;
+    name: string;
+    description?: string | null;
+    priceKobo: number;
+    category?: string | null;
+    available: boolean;
+    sortOrder: number;
+  }): Promise<MenuItemRecord>;
   getItemById(id: string): Promise<MenuItemRecord | null>;
 }
 
@@ -86,6 +102,23 @@ export interface AnalyticsRepository {
     totalScans: number;
     uniqueCustomers: number;
     rewardsTriggered: number;
+  }>;
+  getAnalyticsDashboard(businessId: string): Promise<{
+    summary: {
+      totalScans: number;
+      uniqueCustomers: number;
+      rewardsTriggered: number;
+    };
+    scansByDay: { date: string; count: number }[];
+    ordersByStatus: { status: string; count: number }[];
+    menuItemsCount: number;
+    staffCount: number;
+    creditsIssuedKobo: number;
+    creditsRedeemedKobo: number;
+    activeVouchers: number;
+    customersNewLast30Days: number;
+    repeatVisitRate: number;
+    pendingOrders: number;
   }>;
 }
 

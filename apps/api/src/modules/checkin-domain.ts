@@ -2,8 +2,8 @@ import {
   DomainError,
   type CheckinRequestContext,
   type CheckinResult,
+  type CreditResult,
   type CustomerRecord,
-  type Reward,
   type TenantContext,
 } from "./types.js";
 import type { CustomerSessionRecord } from "./types.js";
@@ -46,7 +46,7 @@ type LoyaltyEnginePort = {
     businessId: string,
     customerId: string,
     visitCount: number,
-  ): Promise<{ pointsBalance: number; reward: Reward }>;
+  ): Promise<CreditResult>;
 };
 
 export class CheckinDomainService {
@@ -62,11 +62,9 @@ export class CheckinDomainService {
     const tenant = await this.tenantSecurity.resolveTenantFromToken(input.token);
     this.tenantSecurity.assertOriginAllowed(tenant, input.origin);
 
-    // Returning customer path: use saved opaque session id.
     if (input.sessionId) {
       const session = await this.customerSessions.findSessionById(input.sessionId);
       if (!session || session.businessId !== tenant.businessId) {
-        // Reuse invalid token semantics since the session is the identity boundary.
         throw new DomainError(
           "INVALID_TOKEN",
           "Session is invalid or expired.",
@@ -86,7 +84,7 @@ export class CheckinDomainService {
       const visitCount = checkin.visitCount;
       const customerId = checkin.customer.id;
 
-      const { pointsBalance, reward } = await this.loyaltyEngine.resolveReward(
+      const credits = await this.loyaltyEngine.resolveReward(
         tenant.businessId,
         customerId,
         visitCount,
@@ -94,14 +92,13 @@ export class CheckinDomainService {
 
       return {
         visitCount,
-        pointsBalance,
-        reward,
+        customerName: checkin.customer.name ?? null,
+        credits,
+        reward: null,
       };
     }
 
-    // First-time path: require name + phone (validated by request schema).
     if (!input.phone || !input.name) {
-      // Failsafe: should never happen because scan route validates.
       throw new DomainError(
         "INVALID_TOKEN",
         "Missing phone or name.",
@@ -130,7 +127,7 @@ export class CheckinDomainService {
     const visitCount = checkin.visitCount;
     const customerId = checkin.customer.id;
 
-    const { pointsBalance, reward } = await this.loyaltyEngine.resolveReward(
+    const credits = await this.loyaltyEngine.resolveReward(
       tenant.businessId,
       customerId,
       visitCount,
@@ -144,8 +141,9 @@ export class CheckinDomainService {
 
     return {
       visitCount,
-      pointsBalance,
-      reward,
+      customerName: checkin.customer.name ?? null,
+      credits,
+      reward: null,
       sessionId: session.id,
     };
   }

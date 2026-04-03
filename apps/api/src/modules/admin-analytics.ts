@@ -6,4 +6,8 @@ export class AdminAnalyticsService {
   async getSummary(businessId: string) {
     return this.analyticsRepository.getSummary(businessId);
   }
+
+  async getDashboard(businessId: string) {
+    return this.analyticsRepository.getAnalyticsDashboard(businessId);
+  }
 }

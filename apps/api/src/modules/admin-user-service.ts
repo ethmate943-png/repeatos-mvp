@@ -11,6 +11,10 @@ export class AdminUserService {
     return this.adminRepo.listAdmins(businessId);
   }
 
+  async findAdminById(businessId: string, adminId: string): Promise<AdminRecord | null> {
+    return this.adminRepo.findAdminById(businessId, adminId);
+  }
+
   async createAdmin(input: {
     businessId: string;
     email: string;

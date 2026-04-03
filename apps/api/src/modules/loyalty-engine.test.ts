@@ -1,141 +1,140 @@
 import { describe, expect, it } from "vitest";
-import { LoyaltyEngine } from "./loyalty-engine.js";
-import type { PointsLedgerRepository, VoucherRepository, TenantRepository } from "./repository.js";
+import { LoyaltyEngine, parseTieredLoyaltyConfig } from "./loyalty-engine.js";
+import type { PointsLedgerRepository, TenantRepository } from "./repository.js";
+import type { PointsLedgerRecord } from "./types.js";
 
-const stubPoints: PointsLedgerRepository = {
-  addEntry: async () => { throw new Error("unused"); },
-  getBalance: async () => 0,
-  listEntries: async () => [],
-};
+const stubTenant = (config: object | null): TenantRepository => ({
+  findTenantByToken: async () => null,
+  getBusiness: async () =>
+    config === null ? null : { loyaltyConfig: config },
+});
 
-const stubVoucher: VoucherRepository = {
-  createVoucher: async () => { throw new Error("unused"); },
-  getVoucherByCode: async () => null,
-  listActiveVouchers: async () => [],
-  markRedeemed: async () => {},
-};
+describe("parseTieredLoyaltyConfig", () => {
+  it("returns defaults when tiers missing", () => {
+    const c = parseTieredLoyaltyConfig({ foo: 1 });
+    expect(c.tiers).toHaveLength(3);
+    expect(c.min_redemption_kobo).toBe(50000);
+  });
+});
 
 describe("LoyaltyEngine", () => {
-  it("awards points and issues voucher when threshold is crossed", async () => {
-    const tenantRepo: TenantRepository = {
-      findTenantByToken: async () => null,
-      getBusiness: async () => ({
-        loyaltyConfig: {
-          points_per_visit: 5000,
-          thresholds: [{ points: 25000, value_kobo: 5000, label: "Free Coffee" }],
-          expiry_days: 30,
-          min_order_kobo: 50000,
-          max_discount_pct: 20,
-        },
-      }),
-    };
-
-    let getBalanceCalls = 0;
+  it("visit 1 awards ₦50 (5000 kobo) and nudges next tier", async () => {
+    const ledger: PointsLedgerRecord[] = [];
     const pointsRepo: PointsLedgerRepository = {
-      addEntry: async (entry) =>
-        ({
-          id: "pl-1",
-          createdAt: new Date(),
-          ...entry,
-        }) as any,
-      getBalance: async () => {
-        getBalanceCalls += 1;
-        return getBalanceCalls === 1 ? 25000 : 0;
+      addEntry: async (entry) => {
+        const row = { ...entry, id: "pl-1", createdAt: new Date() } as PointsLedgerRecord;
+        ledger.push(row);
+        return row;
       },
+      getBalance: async (_b, _c) =>
+        ledger
+          .filter(
+            (e) =>
+              e.businessId === _b &&
+              e.customerId === _c &&
+              (!e.expiresAt || e.expiresAt > new Date()),
+          )
+          .reduce((s, e) => s + e.amount, 0),
       listEntries: async () => [],
     };
 
-    const voucherRepo: VoucherRepository = {
-      createVoucher: async (input) =>
-        ({
-          id: "v-1",
-          issuedAt: new Date(),
-          ...input,
-        }) as any,
-      getVoucherByCode: async () => null,
-      listActiveVouchers: async () => [],
-      markRedeemed: async () => {},
-    };
+    const engine = new LoyaltyEngine(
+      pointsRepo,
+      stubTenant({
+        tiers: [
+          { from: 1, to: 3, credits_kobo: 5000 },
+          { from: 4, to: 10, credits_kobo: 10000 },
+          { from: 11, to: null, credits_kobo: 15000 },
+        ],
+        min_redemption_kobo: 50000,
+        max_discount_pct: 20,
+        expiry_days: 30,
+      }),
+    );
 
-    const engine = new LoyaltyEngine(pointsRepo, voucherRepo, tenantRepo);
-    const result = await engine.resolveReward("biz-1", "cus-1", 5);
-
-    expect(result.pointsBalance).toBe(0);
-    expect(result.reward).not.toBeNull();
-    expect(result.reward?.label).toBe("Free Coffee");
-    expect(result.reward?.valueKobo).toBe(5000);
-    expect(result.reward?.code).toHaveLength(8);
+    const result = await engine.resolveReward("biz-1", "cus-1", 1);
+    expect(result.creditsEarned).toBe(5000);
+    expect(result.creditBalance).toBe(5000);
+    expect(result.tierLabel).toBe("₦50 per visit");
+    expect(result.nudgeMessage).toBe("3 visits → ₦100 bonus");
   });
 
-  it("returns null reward when no threshold matches", async () => {
-    const tenantRepo: TenantRepository = {
-      findTenantByToken: async () => null,
-      getBusiness: async () => ({
-        loyaltyConfig: {
-          points_per_visit: 5000,
-          thresholds: [{ points: 25000, value_kobo: 5000, label: "Free Coffee" }],
-          expiry_days: 30,
-          min_order_kobo: 50000,
-          max_discount_pct: 20,
-        },
-      }),
-    };
-
-    let getBalanceCalls = 0;
+  it("visit 4 awards ₦100 and nudges tier 11", async () => {
+    const ledger: PointsLedgerRecord[] = [];
     const pointsRepo: PointsLedgerRepository = {
-      addEntry: async (entry) =>
-        ({
-          id: "pl-1",
-          createdAt: new Date(),
-          ...entry,
-        }) as any,
-      getBalance: async () => {
-        getBalanceCalls += 1;
-        return getBalanceCalls === 1 ? 10000 : 10000; // no redeem => second call not used
+      addEntry: async (entry) => {
+        const row = { ...entry, id: `pl-${ledger.length}`, createdAt: new Date() } as PointsLedgerRecord;
+        ledger.push(row);
+        return row;
       },
+      getBalance: async (_b, _c) =>
+        ledger
+          .filter(
+            (e) =>
+              e.businessId === _b &&
+              e.customerId === _c &&
+              (!e.expiresAt || e.expiresAt > new Date()),
+          )
+          .reduce((s, e) => s + e.amount, 0),
       listEntries: async () => [],
     };
 
-    const voucherRepo: VoucherRepository = {
-      createVoucher: async () => { throw new Error("should not issue voucher"); },
-      getVoucherByCode: async () => null,
-      listActiveVouchers: async () => [],
-      markRedeemed: async () => {},
-    };
+    const engine = new LoyaltyEngine(
+      pointsRepo,
+      stubTenant({
+        tiers: [
+          { from: 1, to: 3, credits_kobo: 5000 },
+          { from: 4, to: 10, credits_kobo: 10000 },
+          { from: 11, to: null, credits_kobo: 15000 },
+        ],
+        min_redemption_kobo: 50000,
+        max_discount_pct: 20,
+        expiry_days: 30,
+      }),
+    );
 
-    const engine = new LoyaltyEngine(pointsRepo, voucherRepo, tenantRepo);
-    const result = await engine.resolveReward("biz-1", "cus-1", 2);
-    expect(result.reward).toBeNull();
-    expect(result.pointsBalance).toBe(10000);
+    const result = await engine.resolveReward("biz-1", "cus-1", 4);
+    expect(result.creditsEarned).toBe(10000);
+    expect(result.tierLabel).toBe("₦100 per visit");
+    expect(result.nudgeMessage).toBe("7 visits → ₦150 bonus");
   });
 
-  it("falls back to default config when loyalty_config is missing", async () => {
-    const tenantRepo: TenantRepository = {
-      findTenantByToken: async () => null,
-      getBusiness: async () => ({}),
-    };
-
+  it("visit 11+ awards ₦150", async () => {
+    const ledger: PointsLedgerRecord[] = [];
     const pointsRepo: PointsLedgerRepository = {
-      addEntry: async (entry) =>
-        ({
-          id: "pl-1",
-          createdAt: new Date(),
-          ...entry,
-        }) as any,
-      getBalance: async () => 0,
+      addEntry: async (entry) => {
+        const row = { ...entry, id: `pl-${ledger.length}`, createdAt: new Date() } as PointsLedgerRecord;
+        ledger.push(row);
+        return row;
+      },
+      getBalance: async (_b, _c) =>
+        ledger
+          .filter(
+            (e) =>
+              e.businessId === _b &&
+              e.customerId === _c &&
+              (!e.expiresAt || e.expiresAt > new Date()),
+          )
+          .reduce((s, e) => s + e.amount, 0),
       listEntries: async () => [],
     };
 
-    const voucherRepo: VoucherRepository = {
-      createVoucher: async () => { throw new Error("should not issue voucher"); },
-      getVoucherByCode: async () => null,
-      listActiveVouchers: async () => [],
-      markRedeemed: async () => {},
-    };
+    const engine = new LoyaltyEngine(
+      pointsRepo,
+      stubTenant({
+        tiers: [
+          { from: 1, to: 3, credits_kobo: 5000 },
+          { from: 4, to: 10, credits_kobo: 10000 },
+          { from: 11, to: null, credits_kobo: 15000 },
+        ],
+        min_redemption_kobo: 50000,
+        max_discount_pct: 20,
+        expiry_days: 30,
+      }),
+    );
 
-    const engine = new LoyaltyEngine(pointsRepo, voucherRepo, tenantRepo);
-    const result = await engine.resolveReward("biz-1", "cus-1", 5);
-    expect(result.reward).toBeNull();
-    expect(result.pointsBalance).toBe(0);
+    const result = await engine.resolveReward("biz-1", "cus-1", 11);
+    expect(result.creditsEarned).toBe(15000);
+    expect(result.tierLabel).toBe("₦150 per visit");
   });
 });

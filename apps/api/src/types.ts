@@ -5,16 +5,15 @@ export type ScanRequest = {
   session_id?: string;
 };
 
-export type RewardResult = {
-  label: string;
-  code: string;
-  value_kobo: number;
-  expires_at: string; // ISO timestamp
-} | null;
+export type RewardResult = null;
 
 export type ScanResponse = {
   visit_count: number;
-  points_balance: number;
+  customer_name: string | null;
+  credits_earned: number;
+  credit_balance: number;
+  tier_label: string;
+  nudge_message: string;
   reward: RewardResult;
   session_id?: string;
 };

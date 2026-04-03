@@ -6,7 +6,10 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
+import { pool } from "./modules/db.js";
+import { startCreditExpiryJob } from "./jobs/expireCredits.js";
 import { adminRoutes } from "./routes/admin.js";
+import { adminCustomerRedeemRoutes } from "./routes/admin-customer-redeem.js";
 import { adminUserRoutes } from "./routes/admin-users.js";
 import { healthRoutes } from "./routes/health.js";
 import { scanRoutes } from "./routes/scan.js";
@@ -34,6 +37,7 @@ async function buildServer() {
   await app.register(scanRoutes);
   await app.register(sessionInfoRoutes);
   await app.register(adminRoutes);
+  await app.register(adminCustomerRedeemRoutes);
   await app.register(adminUserRoutes);
   await app.register(widgetRoutes);
   await app.register(orderRoutes);
@@ -57,6 +61,7 @@ async function buildServer() {
 }
 
 async function start() {
+  startCreditExpiryJob(pool);
   const app = await buildServer();
 
   try {

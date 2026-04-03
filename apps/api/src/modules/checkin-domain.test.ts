@@ -19,8 +19,15 @@ const customer: CustomerRecord = {
   lastSeen: now,
 };
 
+const sampleCredits = {
+  creditsEarned: 5000,
+  creditBalance: 5000,
+  nudgeMessage: "3 visits → ₦100 bonus",
+  tierLabel: "₦50 per visit",
+};
+
 describe("CheckinDomainService", () => {
-  it("executes full checkin and returns visit count + points + reward", async () => {
+  it("executes full checkin and returns credits + session", async () => {
     const service = new CheckinDomainService(
       {
         resolveTenantFromToken: async () => tenant,
@@ -46,13 +53,10 @@ describe("CheckinDomainService", () => {
       },
       {
         resolveReward: async () => ({
-          pointsBalance: 0,
-          reward: {
-            label: "Free Coffee",
-            code: "ABCDEFGH",
-            valueKobo: 5000,
-            expiresAt: new Date("2030-01-01T00:00:00.000Z"),
-          },
+          creditsEarned: 10000,
+          creditBalance: 45000,
+          nudgeMessage: "6 visits → ₦150 bonus",
+          tierLabel: "₦100 per visit",
         }),
       },
     );
@@ -65,17 +69,14 @@ describe("CheckinDomainService", () => {
     });
 
     expect(result.visitCount).toBe(5);
-    expect(result.pointsBalance).toBe(0);
-    expect(result.reward).toEqual({
-      label: "Free Coffee",
-      code: "ABCDEFGH",
-      valueKobo: 5000,
-      expiresAt: new Date("2030-01-01T00:00:00.000Z"),
-    });
+    expect(result.customerName).toBe("Test Name");
+    expect(result.credits.creditBalance).toBe(45000);
+    expect(result.credits.creditsEarned).toBe(10000);
+    expect(result.reward).toBeNull();
     expect(result.sessionId).toBe("sess-1");
   });
 
-  it("returns null reward when no threshold matches", async () => {
+  it("returns reward null for first visit credits", async () => {
     const service = new CheckinDomainService(
       {
         resolveTenantFromToken: async () => tenant,
@@ -100,7 +101,7 @@ describe("CheckinDomainService", () => {
         }),
       },
       {
-        resolveReward: async () => ({ pointsBalance: 1000, reward: null }),
+        resolveReward: async () => sampleCredits,
       },
     );
 
@@ -112,12 +113,12 @@ describe("CheckinDomainService", () => {
     });
 
     expect(result.visitCount).toBe(1);
-    expect(result.pointsBalance).toBe(1000);
+    expect(result.credits).toEqual(sampleCredits);
     expect(result.reward).toBeNull();
     expect(result.sessionId).toBe("sess-2");
   });
 
-  it("executes returning checkin with session id and skips name/phone capture", async () => {
+  it("executes returning checkin with session id", async () => {
     const session = {
       id: "sess-3",
       businessId: tenant.businessId,
@@ -160,7 +161,12 @@ describe("CheckinDomainService", () => {
         },
       },
       {
-        resolveReward: async () => ({ pointsBalance: 1234, reward: null }),
+        resolveReward: async () => ({
+          creditsEarned: 5000,
+          creditBalance: 12340,
+          nudgeMessage: "2 visits → ₦100 bonus",
+          tierLabel: "₦50 per visit",
+        }),
       },
     );
 
@@ -171,7 +177,8 @@ describe("CheckinDomainService", () => {
     });
 
     expect(result.visitCount).toBe(2);
-    expect(result.pointsBalance).toBe(1234);
+    expect(result.customerName).toBe("Test Name");
+    expect(result.credits.creditBalance).toBe(12340);
     expect(result.reward).toBeNull();
     expect(result.sessionId).toBeUndefined();
   });

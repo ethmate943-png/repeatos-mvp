@@ -49,13 +49,22 @@ export class InMemoryRepository
       "biz-bliss",
       {
         id: "biz-bliss",
+        name: "Bliss (legacy seed)",
+        slug: "bliss-legacy",
+        integrationMode: "external",
+        menuUrl: "https://example.com/menu",
         allowedOrigins: ["http://localhost:3000", "https://blisscafe.com"],
+        createdAt: now(),
         loyalty_config: {
-          thresholds: [{ visits: 5, reward: 5000 }],
+          tiers: [
+            { from: 1, to: 3, credits_kobo: 5000 },
+            { from: 4, to: 10, credits_kobo: 10000 },
+            { from: 11, to: null, credits_kobo: 15000 },
+          ],
+          min_redemption_kobo: 50000,
+          max_discount_pct: 20,
           expiry_days: 30,
-          min_order: 1000,
-          max_discount_percent: 20
-        }
+        },
       },
     ],
   ]);
@@ -81,17 +90,19 @@ export class InMemoryRepository
       id: demoBusinessId,
       name: "Bliss Cafe",
       slug: "blisscafe",
+      integrationMode: "hosted",
+      menuUrl: null,
       allowedOrigins: ["*", "http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
       loyaltyConfig: {
-        thresholds: [
-          { visits: "1-5", reward: 1000 },
-          { visits: 6, reward: 5000 }
+        tiers: [
+          { from: 1, to: 3, credits_kobo: 5000 },
+          { from: 4, to: 10, credits_kobo: 10000 },
+          { from: 11, to: null, credits_kobo: 15000 },
         ],
-        reward_threshold: 1000, // Issue voucher at 1000 points
+        min_redemption_kobo: 50000,
+        max_discount_pct: 20,
         expiry_days: 30,
-        min_order: 10000, // 100 Naira
-        max_discount_percent: 20
-      }
+      },
     });
 
     this.qrCodes.set(demoToken, {
@@ -133,7 +144,12 @@ export class InMemoryRepository
   }
 
   async getBusiness(id: string): Promise<any> {
-    return this.businesses.get(id) ?? null;
+    const b = this.businesses.get(id);
+    if (!b) return null;
+    return {
+      ...b,
+      createdAt: b.createdAt ?? now(),
+    };
   }
 
   async findTenantByToken(token: string): Promise<TenantContext | null> {
@@ -150,6 +166,17 @@ export class InMemoryRepository
 
   async findByBusinessAndPhone(businessId: string, phone: string): Promise<CustomerRecord | null> {
     return this.customers.get(`${businessId}:${phone}`) ?? null;
+  }
+
+  async findCustomerById(
+    businessId: string,
+    customerId: string,
+  ): Promise<CustomerRecord | null> {
+    return (
+      Array.from(this.customers.values()).find(
+        (c) => c.businessId === businessId && c.id === customerId,
+      ) ?? null
+    );
   }
 
   async upsertVisit(
@@ -174,10 +201,15 @@ export class InMemoryRepository
       return created;
     }
 
+    const nextName =
+      name != null && String(name).trim() !== ""
+        ? String(name).trim()
+        : existing.name;
+
     const updated: CustomerRecord = {
       ...existing,
       lastSeen: timestamp,
-      name: existing.name ?? name,
+      name: nextName,
     };
     this.customers.set(key, updated);
     return updated;
@@ -234,8 +266,20 @@ export class InMemoryRepository
   }
 
   // --- AdminRepository ---
+  async listBusinesses(): Promise<{ id: string; name: string; slug: string }[]> {
+    return Array.from(this.businesses.values()).map((b: any) => ({
+      id: b.id,
+      name: b.name ?? "Business",
+      slug: b.slug ?? b.id,
+    }));
+  }
+
   async listAdmins(businessId: string): Promise<AdminRecord[]> {
     return this.admins.filter(a => a.businessId === businessId);
+  }
+
+  async findAdminById(businessId: string, adminId: string): Promise<AdminRecord | null> {
+    return this.admins.find((a) => a.businessId === businessId && a.id === adminId) ?? null;
   }
 
   async createAdmin(admin: Omit<AdminRecord, "id" | "createdAt">): Promise<AdminRecord> {
@@ -278,8 +322,14 @@ export class InMemoryRepository
     return inserted;
   }
   async getBalance(businessId: string, customerId: string): Promise<number> {
+    const nowMs = Date.now();
     return this.pointsLedger
-      .filter(e => e.businessId === businessId && e.customerId === customerId)
+      .filter(
+        (e) =>
+          e.businessId === businessId &&
+          e.customerId === customerId &&
+          (!e.expiresAt || e.expiresAt.getTime() > nowMs),
+      )
       .reduce((sum, e) => sum + e.amount, 0);
   }
   async listEntries(businessId: string, customerId: string): Promise<PointsLedgerRecord[]> {
@@ -306,9 +356,45 @@ export class InMemoryRepository
 
   // --- MenuRepository ---
   async listItems(businessId: string): Promise<MenuItemRecord[]> {
-    return Array.from(this.menuItems.values()).filter(i => i.businessId === businessId);
+    return Array.from(this.menuItems.values()).filter(
+      (i) => i.businessId === businessId && i.available,
+    );
   }
-  async getItemById(id: string): Promise<MenuItemRecord | null> { return this.menuItems.get(id) ?? null; }
+
+  async listAllMenuItems(businessId: string): Promise<MenuItemRecord[]> {
+    return Array.from(this.menuItems.values())
+      .filter((i) => i.businessId === businessId)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  }
+
+  async createMenuItem(input: {
+    businessId: string;
+    name: string;
+    description?: string | null;
+    priceKobo: number;
+    category?: string | null;
+    available: boolean;
+    sortOrder: number;
+  }): Promise<MenuItemRecord> {
+    const id = randomUUID();
+    const created: MenuItemRecord = {
+      id,
+      businessId: input.businessId,
+      name: input.name.trim(),
+      description: input.description?.trim() || undefined,
+      priceKobo: input.priceKobo,
+      category: input.category?.trim() || undefined,
+      available: input.available,
+      sortOrder: input.sortOrder,
+      createdAt: now(),
+    };
+    this.menuItems.set(id, created);
+    return created;
+  }
+
+  async getItemById(id: string): Promise<MenuItemRecord | null> {
+    return this.menuItems.get(id) ?? null;
+  }
 
   // --- RewardRepository ---
   async findRewardByVisitCount(businessId: string, visitCount: number): Promise<{ label: string } | null> {
@@ -316,12 +402,99 @@ export class InMemoryRepository
   }
   async listRewards(businessId: string): Promise<{ visitsRequired: number; label: string }[]> {
     const biz = this.businesses.get(businessId);
-    return biz?.loyalty_config?.thresholds?.map((t: any) => ({ visitsRequired: t.visits, label: `${t.reward/1000} Point Reward` })) || [];
+    const tiers = biz?.loyaltyConfig?.tiers ?? biz?.loyalty_config?.tiers;
+    if (!Array.isArray(tiers)) return [];
+    return tiers.map((t: { from: number; credits_kobo: number }) => ({
+      visitsRequired: t.from,
+      label: `₦${t.credits_kobo / 100} per visit`,
+    }));
   }
 
   // --- AnalyticsRepository ---
   async getSummary(businessId: string): Promise<any> {
-    return { totalScans: this.scans.length, uniqueCustomers: this.customers.size, rewardsTriggered: 0 };
+    const scansBiz = this.scans.filter((s) => s.businessId === businessId);
+    const custBiz = Array.from(this.customers.values()).filter((c) => c.businessId === businessId);
+    const fromScans = new Set(scansBiz.map((s) => s.customerId)).size;
+    return {
+      totalScans: scansBiz.length,
+      uniqueCustomers: fromScans > 0 ? fromScans : custBiz.length,
+      rewardsTriggered: 0,
+    };
+  }
+
+  async getAnalyticsDashboard(businessId: string) {
+    const summary = await this.getSummary(businessId);
+    const scansBiz = this.scans.filter((s) => s.businessId === businessId);
+    const byDay = new Map<string, number>();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - i);
+      byDay.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const s of scansBiz) {
+      const key = s.scannedAt.toISOString().slice(0, 10);
+      if (byDay.has(key)) byDay.set(key, (byDay.get(key) ?? 0) + 1);
+    }
+    const scansByDay = Array.from(byDay.entries()).map(([date, count]) => ({ date, count }));
+
+    const statusMap = new Map<string, number>();
+    for (const o of this.orders.values()) {
+      if (o.businessId !== businessId) continue;
+      statusMap.set(o.status, (statusMap.get(o.status) ?? 0) + 1);
+    }
+    const ordersByStatus = Array.from(statusMap.entries()).map(([status, count]) => ({
+      status,
+      count,
+    }));
+
+    const menuItemsCount = Array.from(this.menuItems.values()).filter(
+      (m) => m.businessId === businessId,
+    ).length;
+    const staffCount = this.admins.filter((a) => a.businessId === businessId).length;
+
+    let creditsIssuedKobo = 0;
+    let creditsRedeemedKobo = 0;
+    for (const e of this.pointsLedger) {
+      if (e.businessId !== businessId) continue;
+      if (e.type === "award") creditsIssuedKobo += e.amount;
+      if (e.type === "redeem") creditsRedeemedKobo += Math.abs(e.amount);
+    }
+
+    const activeVouchers = Array.from(this.vouchers.values()).filter(
+      (v) => v.businessId === businessId && v.status === "active",
+    ).length;
+
+    const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+    const customersNewLast30Days = Array.from(this.customers.values()).filter(
+      (c) => c.businessId === businessId && c.firstSeen.getTime() >= cutoff,
+    ).length;
+
+    const visitCounts = new Map<string, number>();
+    for (const s of scansBiz) {
+      visitCounts.set(s.customerId, (visitCounts.get(s.customerId) ?? 0) + 1);
+    }
+    const ws = visitCounts.size;
+    const rep = Array.from(visitCounts.values()).filter((n) => n > 1).length;
+    const repeatVisitRate = ws > 0 ? rep / ws : 0;
+
+    const pendingOrders = Array.from(this.orders.values()).filter(
+      (o) => o.businessId === businessId && o.status === "pending",
+    ).length;
+
+    return {
+      summary,
+      scansByDay,
+      ordersByStatus,
+      menuItemsCount,
+      staffCount,
+      creditsIssuedKobo,
+      creditsRedeemedKobo,
+      activeVouchers,
+      customersNewLast30Days,
+      repeatVisitRate,
+      pendingOrders,
+    };
   }
 
   // --- WidgetRepository ---

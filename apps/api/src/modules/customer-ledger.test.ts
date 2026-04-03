@@ -6,6 +6,7 @@ const now = new Date();
 
 const stubRepo: CustomerLedgerRepository = {
   findByBusinessAndPhone: async () => null,
+  findCustomerById: async () => null,
   hasRecentScan: async () => false,
   countScans: async () => 1,
   listCustomers: async () => [],

@@ -96,15 +96,12 @@ export async function scanRoutes(app: FastifyInstance) {
 
       const response: ScanResponse = {
         visit_count: result.visitCount,
-        points_balance: result.pointsBalance,
-        reward: result.reward
-          ? {
-              label: result.reward.label,
-              code: result.reward.code,
-              value_kobo: result.reward.valueKobo,
-              expires_at: result.reward.expiresAt.toISOString(),
-            }
-          : null,
+        customer_name: result.customerName,
+        credits_earned: result.credits.creditsEarned,
+        credit_balance: result.credits.creditBalance,
+        tier_label: result.credits.tierLabel,
+        nudge_message: result.credits.nudgeMessage,
+        reward: null,
         session_id: result.sessionId,
       };
 
